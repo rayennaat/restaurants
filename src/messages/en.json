@@ -1,0 +1,4 @@
+{
+  "common": { "appName": "PlatePilot", "save": "Save", "cancel": "Cancel" },
+  "dashboard": { "title": "Operations overview", "subtitle": "Know what changed, what is at risk, and where profit is leaking." }
+}

@@ -1,0 +1,2 @@
+import { cn } from "@/lib/utils";
+export function Badge({ className, tone = "neutral", ...props }: React.HTMLAttributes<HTMLSpanElement> & { tone?: "neutral" | "success" | "warning" | "danger" }) { return <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-bold", { "bg-neutral-100 text-neutral-700": tone === "neutral", "bg-green-100 text-green-800": tone === "success", "bg-amber-100 text-amber-800": tone === "warning", "bg-red-100 text-red-800": tone === "danger" }, className)} {...props} />; }

@@ -1,0 +1,2 @@
+import { AuthForm } from "@/components/auth/auth-form";
+export default function SignUpPage() { return <main className="grid min-h-screen place-items-center p-6 grid-bg"><div className="w-full max-w-md rounded-3xl border bg-white p-8 panel-shadow"><div className="text-sm font-black uppercase tracking-[.2em] text-green-700">PlatePilot</div><h1 className="mt-3 text-3xl font-black">Create your workspace</h1><p className="mb-7 mt-2 text-[var(--muted)]">Start with one location. Add the rest later.</p><AuthForm mode="signup" /></div></main>; }

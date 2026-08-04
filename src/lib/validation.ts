@@ -1,0 +1,5 @@
+import { z } from "zod";
+export const ingredientInput = z.object({ name: z.string().min(2).max(120), baseUnitCode: z.enum(["kg", "g", "l", "ml", "unit"]), minimumStock: z.coerce.number().nonnegative(), latestUnitCostMillis: z.coerce.number().int().nonnegative(), clientOperationId: z.string().uuid().optional() });
+export const wasteInput = z.object({ ingredientId: z.string().uuid(), quantity: z.coerce.number().positive(), reason: z.enum(["expired", "damaged", "overproduction", "preparation_error", "quality_issue", "other"]), note: z.string().max(500).optional(), clientOperationId: z.string().uuid().optional() });
+export const purchaseInput = z.object({ ingredientId: z.string().uuid(), quantity: z.coerce.number().positive(), unitCostMillis: z.coerce.number().int().nonnegative(), invoiceNumber: z.string().max(100).optional(), clientOperationId: z.string().uuid().optional() });
+export const onboardingInput = z.object({ organizationName: z.string().min(2).max(120), locationName: z.string().min(2).max(120), currency: z.enum(["TND", "USD"]), locale: z.enum(["fr-TN", "ar-TN", "en-US"]) });

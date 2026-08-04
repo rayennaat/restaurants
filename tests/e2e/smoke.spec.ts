@@ -1,0 +1,2 @@
+import { test, expect } from "@playwright/test";
+test("demo dashboard and inventory load", async ({ page }) => { await page.goto("/dashboard"); await expect(page.getByRole("heading", { name: "Operations overview" })).toBeVisible(); await page.goto("/dashboard/inventory"); await expect(page.getByRole("heading", { name: "Inventory" })).toBeVisible(); await expect(page.getByText("Chicken breast")).toBeVisible(); });

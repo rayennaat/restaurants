@@ -1,0 +1,9 @@
+"use client";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { toast } from "sonner";
+import { submitOrQueue } from "@/lib/offline/db";
+import { Button } from "@/components/ui/button"; import { Input } from "@/components/ui/input"; import { Label } from "@/components/ui/label";
+const schema = z.object({ name: z.string().min(2), baseUnitCode: z.string().min(1), minimumStock: z.coerce.number().nonnegative(), latestUnitCostMillis: z.coerce.number().int().nonnegative() }); type Values = z.infer<typeof schema>;
+export function IngredientForm() { const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { baseUnitCode: "kg", minimumStock: 0, latestUnitCostMillis: 0 } }); async function submit(values: Values) { const result = await submitOrQueue("/api/ingredients", values); toast.success(result.queued ? "Saved offline; it will sync later" : "Ingredient created"); reset(); location.reload(); } return <form onSubmit={handleSubmit(submit)} className="grid gap-4 sm:grid-cols-2"><div className="sm:col-span-2"><Label>Name</Label><Input {...register("name")}/>{errors.name && <p className="text-xs text-red-600">{errors.name.message}</p>}</div><div><Label>Base unit</Label><select {...register("baseUnitCode")} className="h-11 w-full rounded-xl border bg-white px-3"><option value="kg">kg</option><option value="g">g</option><option value="l">litre</option><option value="ml">ml</option><option value="unit">unit</option></select></div><div><Label>Minimum stock</Label><Input type="number" step="0.001" {...register("minimumStock")}/></div><div className="sm:col-span-2"><Label>Cost per base unit in millimes</Label><Input type="number" {...register("latestUnitCostMillis")}/></div><Button className="sm:col-span-2" disabled={isSubmitting}>Add ingredient</Button></form>; }
