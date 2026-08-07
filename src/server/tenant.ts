@@ -1,16 +1,132 @@
-import { and, eq } from "drizzle-orm";
-import { createClient } from "@/lib/supabase/server";
+import { and, asc, eq } from "drizzle-orm";
+import { cache } from "react";
+import { redirect } from "next/navigation";
 import { getDb } from "@/db/client";
-import { organizationMembers, organizations, locations } from "@/db/schema";
-export const DEMO_ORG_ID = "00000000-0000-4000-8000-000000000001";
-export const DEMO_LOCATION_ID = "00000000-0000-4000-8000-000000000002";
-export async function getTenantContext() {
-  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") return { userId: "demo-user", organizationId: DEMO_ORG_ID, locationId: DEMO_LOCATION_ID, role: "owner" as const, organizationName: "Demo Bistro", currency: "TND" };
-  const supabase = await createClient(); const { data: { user } } = await supabase.auth.getUser(); if (!user) return null;
+import { locations, organizationMembers, organizations, units } from "@/db/schema";
+import { createClient } from "@/lib/supabase/server";
+import type { UnitRow } from "@/lib/units";
+
+export type MemberRole = "owner" | "manager" | "inventory" | "kitchen" | "accountant" | "viewer";
+
+export type TenantContext = {
+  userId: string;
+  email: string | null;
+  organizationId: string;
+  organizationName: string;
+  /** Active location. Null only if every location was archived. */
+  locationId: string | null;
+  role: MemberRole;
+  currency: string;
+  locale: string;
+  timezone: string;
+  onboardingCompletedAt: Date | null;
+};
+
+export type TenantState = TenantContext | { needsOnboarding: true; userId: string } | null;
+
+/**
+ * Resolves the signed-in user's organization.
+ *
+ * Returns `null` when nobody is signed in, and `{ needsOnboarding: true }` when
+ * the user exists in Supabase Auth but has not created a workspace yet.
+ * Cached per request so the many server components on a page share one query.
+ */
+export const getTenantContext = cache(async (): Promise<TenantState> => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
   const db = getDb();
-  const [row] = await db.select({ organizationId: organizationMembers.organizationId, locationId: organizationMembers.defaultLocationId, role: organizationMembers.role, organizationName: organizations.name, currency: organizations.currency }).from(organizationMembers).innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId)).where(eq(organizationMembers.userId, user.id)).limit(1);
-  if (!row) return { userId: user.id, needsOnboarding: true as const };
+  const [row] = await db
+    .select({
+      organizationId: organizationMembers.organizationId,
+      locationId: organizationMembers.defaultLocationId,
+      role: organizationMembers.role,
+      organizationName: organizations.name,
+      currency: organizations.currency,
+      locale: organizations.locale,
+      timezone: organizations.timezone,
+      onboardingCompletedAt: organizations.onboardingCompletedAt,
+    })
+    .from(organizationMembers)
+    .innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
+    .where(eq(organizationMembers.userId, user.id))
+    .orderBy(asc(organizationMembers.createdAt))
+    .limit(1);
+
+  if (!row) return { needsOnboarding: true, userId: user.id };
+
   let locationId = row.locationId;
-  if (!locationId) { const [location] = await db.select({ id: locations.id }).from(locations).where(and(eq(locations.organizationId, row.organizationId), eq(locations.isActive, true))).limit(1); locationId = location?.id ?? null; }
-  return { userId: user.id, organizationId: row.organizationId, locationId, role: row.role, organizationName: row.organizationName, currency: row.currency };
+  if (!locationId) {
+    const [location] = await db
+      .select({ id: locations.id })
+      .from(locations)
+      .where(and(eq(locations.organizationId, row.organizationId), eq(locations.isActive, true)))
+      .orderBy(asc(locations.createdAt))
+      .limit(1);
+    locationId = location?.id ?? null;
+  }
+
+  return {
+    userId: user.id,
+    email: user.email ?? null,
+    organizationId: row.organizationId,
+    organizationName: row.organizationName,
+    locationId,
+    role: row.role,
+    currency: row.currency,
+    locale: row.locale,
+    timezone: row.timezone,
+    onboardingCompletedAt: row.onboardingCompletedAt,
+  };
+});
+
+/**
+ * Page/server-action guard. Redirects unauthenticated users to sign-in and
+ * users without a workspace to onboarding, so callers always get a real tenant.
+ */
+export async function requireTenant(): Promise<TenantContext> {
+  const tenant = await getTenantContext();
+  if (!tenant) redirect("/auth/login");
+  if ("needsOnboarding" in tenant) redirect("/onboarding");
+  return tenant;
 }
+
+/** Like {@link requireTenant} but also guarantees a location to post stock against. */
+export async function requireTenantLocation() {
+  const tenant = await requireTenant();
+  if (!tenant.locationId) redirect("/dashboard/settings?missing=location");
+  return tenant as TenantContext & { locationId: string };
+}
+
+const WRITE_ROLES: Record<string, MemberRole[]> = {
+  // Catalog and commercial configuration.
+  manage_catalog: ["owner", "manager"],
+  // Day-to-day stock movements: receiving, waste, counts.
+  record_operations: ["owner", "manager", "inventory", "kitchen"],
+  // Organization-level settings, members, units, locations.
+  manage_settings: ["owner", "manager"],
+};
+
+export type Permission = keyof typeof WRITE_ROLES;
+
+export function can(role: MemberRole, permission: Permission) {
+  return WRITE_ROLES[permission].includes(role);
+}
+
+/** Throws inside server actions when the member's role is not allowed to write. */
+export function assertCan(role: MemberRole, permission: Permission) {
+  if (!can(role, permission)) throw new Error("Your role does not allow this action.");
+}
+
+/** Org-scoped unit table used by every quantity conversion. */
+export const getOrganizationUnits = cache(async (organizationId: string): Promise<UnitRow[]> => {
+  const rows = await getDb()
+    .select({ code: units.code, name: units.name, dimension: units.dimension, multiplierToBase: units.multiplierToBase, isBase: units.isBase })
+    .from(units)
+    .where(eq(units.organizationId, organizationId))
+    .orderBy(asc(units.dimension), asc(units.multiplierToBase));
+  return rows;
+});

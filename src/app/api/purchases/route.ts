@@ -1,2 +1,23 @@
-import { NextResponse } from "next/server"; import { eq } from "drizzle-orm"; import { getDb } from "@/db/client"; import { ingredients, purchaseItems, purchases, stockMovements } from "@/db/schema"; import { purchaseInput } from "@/lib/validation"; import { getTenantContext } from "@/server/tenant";
-export async function POST(request: Request) { try { const input = purchaseInput.parse(await request.json()); const tenant = await getTenantContext(); if (!tenant || "needsOnboarding" in tenant || !tenant.locationId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") return NextResponse.json({ ok: true, demo: true }); const db = getDb(); const result = await db.transaction(async tx => { const [ingredient] = await tx.select().from(ingredients).where(eq(ingredients.id, input.ingredientId)).limit(1); if (!ingredient || ingredient.organizationId !== tenant.organizationId) throw new Error("Ingredient not found"); const lineTotalMillis = Math.round(input.quantity * input.unitCostMillis); const [purchase] = await tx.insert(purchases).values({ organizationId: tenant.organizationId, locationId: tenant.locationId!, invoiceNumber: input.invoiceNumber, totalMillis: lineTotalMillis, createdBy: tenant.userId === "demo-user" ? null : tenant.userId, clientOperationId: input.clientOperationId }).returning(); await tx.insert(purchaseItems).values({ purchaseId: purchase.id, ingredientId: input.ingredientId, quantity: String(input.quantity), unitCostMillis: input.unitCostMillis, lineTotalMillis }); await tx.insert(stockMovements).values({ organizationId: tenant.organizationId, locationId: tenant.locationId!, ingredientId: input.ingredientId, type: "purchase", quantity: String(input.quantity), unitCostMillis: input.unitCostMillis, referenceType: "purchase", referenceId: purchase.id, performedBy: tenant.userId === "demo-user" ? null : tenant.userId, clientOperationId: input.clientOperationId }); await tx.update(ingredients).set({ latestUnitCostMillis: input.unitCostMillis, updatedAt: new Date() }).where(eq(ingredients.id, input.ingredientId)); return purchase; }); return NextResponse.json(result, { status: 201 }); } catch (error: any) { const duplicate = error?.code === "23505"; return NextResponse.json({ error: duplicate ? "Already synchronized" : error instanceof Error ? error.message : "Invalid request" }, { status: duplicate ? 409 : 400 }); } }
+import { NextResponse } from "next/server";
+import { receivePurchase } from "@/server/actions/purchases";
+
+/**
+ * Multi-line purchase receiving over HTTP.
+ *
+ * The offline queue replays queued mutations through this endpoint, so it
+ * delegates to the same server action the invoice builder uses. A duplicate
+ * `clientOperationId` is reported as 409 so the queue drops the entry instead
+ * of retrying it forever.
+ */
+export async function POST(request: Request) {
+  try {
+    const result = await receivePurchase(await request.json());
+    if (!result.ok) {
+      const isDuplicate = result.error.toLowerCase().includes("already");
+      return NextResponse.json({ error: result.error, fieldErrors: result.fieldErrors }, { status: isDuplicate ? 409 : 400 });
+    }
+    return NextResponse.json(result.data, { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid request" }, { status: 400 });
+  }
+}

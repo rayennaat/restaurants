@@ -1,2 +1,29 @@
-import { OnboardingForm } from "@/components/forms/onboarding-form";
-export default function OnboardingPage() { return <main className="grid min-h-screen place-items-center p-6 grid-bg"><div className="w-full max-w-lg rounded-3xl border bg-white p-8 panel-shadow"><p className="text-xs font-black uppercase tracking-[.2em] text-green-700">One-minute setup</p><h1 className="mt-2 text-3xl font-black">Create your restaurant workspace</h1><p className="mb-7 mt-2 text-[var(--muted)]">This creates the organization, first location, owner membership and standard units in one database transaction.</p><OnboardingForm/></div></main>; }
+import { redirect } from "next/navigation";
+import { getTenantContext } from "@/server/tenant";
+import { WorkspaceCreation } from "@/components/onboarding/workspace-creation";
+import { SetupChecklist } from "@/components/onboarding/setup-checklist";
+import { getSetupProgress } from "@/server/queries/onboarding";
+
+export const metadata = { title: "Get Started" };
+
+/**
+ * Onboarding branches on tenant state:
+ *  - No org yet → workspace creation form
+ *  - Org exists but setup incomplete → 4-step guided checklist
+ *  - Setup complete → redirect to dashboard
+ */
+export default async function OnboardingPage() {
+  const state = await getTenantContext();
+
+  // No organization yet — show the workspace creation form.
+  if (!state || "needsOnboarding" in state) {
+    return <WorkspaceCreation />;
+  }
+
+  // Organization exists. If setup is finished, go straight to the dashboard.
+  const setup = await getSetupProgress(state.organizationId);
+  if (setup.allStepsComplete) redirect("/dashboard");
+
+  // Setup incomplete — show the guided checklist.
+  return <SetupChecklist progress={setup} />;
+}

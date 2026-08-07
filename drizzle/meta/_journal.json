@@ -8,6 +8,13 @@
       "when": 1785861609002,
       "tag": "0000_fine_tusk",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786067225884,
+      "tag": "0001_profit_ops_expansion",
+      "breakpoints": true
     }
   ]
 }
