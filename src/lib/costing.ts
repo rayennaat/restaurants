@@ -32,7 +32,9 @@ export function calculateFoodCostPercent(sellingPriceMillis: number, costMillis:
   return (costMillis / sellingPriceMillis) * 100;
 }
 
+/** A recipe line consuming a raw ingredient. */
 export type RecipeIngredientInput = {
+  kind?: "ingredient";
   ingredientId: string;
   ingredientName: string;
   /** Quantity as entered by the user, expressed in `unitCode`. */
@@ -43,43 +45,207 @@ export type RecipeIngredientInput = {
   unitCostMillis: number;
 };
 
-export type CostedRecipeLine = RecipeIngredientInput & {
-  /** `quantity` converted into the ingredient base unit. */
+/** A recipe line consuming another recipe as a sub-preparation. */
+export type RecipeComponentInput = {
+  kind: "recipe";
+  componentRecipeId: string;
+  componentName: string;
+  /** Quantity of the sub-recipe's yield unit that this line consumes. */
+  quantity: number;
+  unitCode: string | null;
+};
+
+export type RecipeLineInput = RecipeIngredientInput | RecipeComponentInput;
+
+export type CostedRecipeLine = {
+  kind: "ingredient" | "recipe";
+  /** Ingredient id, or component recipe id for sub-recipe lines. */
+  targetId: string;
+  name: string;
+  quantity: number;
+  unitCode: string | null;
+  /** The unit `quantity` was converted into: the ingredient base unit, or the sub-recipe yield unit. */
+  baseUnitCode: string;
+  /** `quantity` converted into `baseUnitCode`. */
   baseQuantity: number;
+  /** Cost of one `baseUnitCode` of this line's target. */
+  unitCostMillis: number;
   /** Cost contribution of this line, in minor currency units. */
   lineCostMillis: number;
   /** Share of the recipe total this line represents, 0-100. */
   sharePercent: number;
+  /** True when this line's cost could not be determined. */
+  isUncosted: boolean;
 };
 
 export type RecipeCosting = {
   lines: CostedRecipeLine[];
   /** Cost of one full production batch. */
   totalCostMillis: number;
-  /** Cost of a single serving/portion. */
+  /** Cost of a single serving/portion — also the cost of one yield unit. */
   costPerServingMillis: number;
   yieldQuantity: number;
-  /** True when at least one ingredient still has no known cost. */
+  yieldUnitCode: string | null;
+  /** True when at least one ingredient or sub-recipe still has no known cost. */
   hasUncostedIngredient: boolean;
+  /** Names of recipes forming a circular dependency, empty when the graph is sound. */
+  circularPath: string[];
+  /** How many levels of sub-recipe this recipe depends on. 0 for raw-only recipes. */
+  depth: number;
 };
 
-/** Prices a recipe from its lines and the org unit table. */
-export function costRecipe(lines: RecipeIngredientInput[], yieldQuantity: number, units: UnitRow[]): RecipeCosting {
-  const priced = lines.map(line => {
-    const baseQuantity = toBaseQuantity(line.quantity, line.unitCode, line.baseUnitCode, units);
-    return { ...line, baseQuantity, lineCostMillis: Math.round(baseQuantity * line.unitCostMillis), sharePercent: 0 };
-  });
+/** A recipe plus its lines, as fed to the graph cost engine. */
+export type RecipeGraphNode = {
+  id: string;
+  name: string;
+  yieldQuantity: number;
+  yieldUnitCode: string | null;
+  lines: RecipeLineInput[];
+};
 
-  const totalCostMillis = priced.reduce((total, line) => total + line.lineCostMillis, 0);
-  const yieldValue = yieldQuantity > 0 ? yieldQuantity : 1;
+const emptyCosting = (node: Pick<RecipeGraphNode, "yieldQuantity" | "yieldUnitCode">, circularPath: string[] = []): RecipeCosting => ({
+  lines: [],
+  totalCostMillis: 0,
+  costPerServingMillis: 0,
+  yieldQuantity: node.yieldQuantity > 0 ? node.yieldQuantity : 1,
+  yieldUnitCode: node.yieldUnitCode,
+  hasUncostedIngredient: true,
+  circularPath,
+  depth: 0,
+});
 
-  return {
-    lines: priced.map(line => ({ ...line, sharePercent: totalCostMillis > 0 ? (line.lineCostMillis / totalCostMillis) * 100 : 0 })),
-    totalCostMillis,
-    costPerServingMillis: Math.round(totalCostMillis / yieldValue),
-    yieldQuantity: yieldValue,
-    hasUncostedIngredient: priced.some(line => line.unitCostMillis <= 0),
-  };
+/**
+ * Prices an entire recipe graph, resolving sub-recipe lines recursively.
+ *
+ * A sub-recipe contributes `quantity × (its batch cost ÷ its yield)`, so a
+ * 1 kg batch of mayonnaise costing 8.400 makes 15 g of it cost 0.126. Results
+ * are memoized, so a preparation shared by ten dishes is costed once.
+ *
+ * Cycles cannot be costed at all (A needs B needs A has no fixed point), so any
+ * recipe on a cycle is returned at zero cost with `circularPath` naming the loop
+ * for the UI to surface. The DB rejects direct self-reference; this catches the
+ * indirect cases.
+ */
+export function costRecipeGraph(nodes: RecipeGraphNode[], units: UnitRow[]): Map<string, RecipeCosting> {
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const memo = new Map<string, RecipeCosting>();
+  const inProgress = new Set<string>();
+
+  function resolve(id: string, stack: string[]): RecipeCosting {
+    const cached = memo.get(id);
+    if (cached) return cached;
+
+    const node = byId.get(id);
+    if (!node) return emptyCosting({ yieldQuantity: 1, yieldUnitCode: null });
+
+    if (inProgress.has(id)) {
+      // Report the loop from its first occurrence so the message reads as a cycle.
+      const start = stack.indexOf(id);
+      const path = [...stack.slice(start === -1 ? 0 : start), node.name];
+      return emptyCosting(node, path);
+    }
+
+    inProgress.add(id);
+    let depth = 0;
+    let circularPath: string[] = [];
+
+    const priced: CostedRecipeLine[] = node.lines.map(line => {
+      if (line.kind === "recipe") {
+        const child = byId.get(line.componentRecipeId);
+        const childCosting = resolve(line.componentRecipeId, [...stack, node.name]);
+        if (childCosting.circularPath.length && !circularPath.length) circularPath = childCosting.circularPath;
+        depth = Math.max(depth, childCosting.depth + 1);
+
+        // The sub-recipe is measured in its own yield unit; convert this line into it.
+        // A yield unit is optional, in which case the line unit is taken as-is.
+        const yieldUnit = child?.yieldUnitCode ?? line.unitCode ?? "";
+        const baseQuantity = toBaseQuantity(line.quantity, line.unitCode, yieldUnit, units);
+        const unitCostMillis = childCosting.costPerServingMillis;
+
+        return {
+          kind: "recipe" as const,
+          targetId: line.componentRecipeId,
+          name: line.componentName,
+          quantity: line.quantity,
+          unitCode: line.unitCode,
+          baseUnitCode: yieldUnit,
+          baseQuantity,
+          unitCostMillis,
+          lineCostMillis: Math.round(baseQuantity * unitCostMillis),
+          sharePercent: 0,
+          isUncosted: unitCostMillis <= 0,
+        };
+      }
+
+      const baseQuantity = toBaseQuantity(line.quantity, line.unitCode, line.baseUnitCode, units);
+      return {
+        kind: "ingredient" as const,
+        targetId: line.ingredientId,
+        name: line.ingredientName,
+        quantity: line.quantity,
+        unitCode: line.unitCode,
+        baseUnitCode: line.baseUnitCode,
+        baseQuantity,
+        unitCostMillis: line.unitCostMillis,
+        lineCostMillis: Math.round(baseQuantity * line.unitCostMillis),
+        sharePercent: 0,
+        isUncosted: line.unitCostMillis <= 0,
+      };
+    });
+
+    inProgress.delete(id);
+
+    if (circularPath.length) {
+      const broken = emptyCosting(node, circularPath);
+      memo.set(id, broken);
+      return broken;
+    }
+
+    const totalCostMillis = priced.reduce((total, line) => total + line.lineCostMillis, 0);
+    const yieldValue = node.yieldQuantity > 0 ? node.yieldQuantity : 1;
+
+    const costing: RecipeCosting = {
+      lines: priced.map(line => ({ ...line, sharePercent: totalCostMillis > 0 ? (line.lineCostMillis / totalCostMillis) * 100 : 0 })),
+      totalCostMillis,
+      costPerServingMillis: Math.round(totalCostMillis / yieldValue),
+      yieldQuantity: yieldValue,
+      yieldUnitCode: node.yieldUnitCode,
+      // A recipe with no lines is not "free" — it is simply not costed yet.
+      hasUncostedIngredient: priced.length === 0 || priced.some(line => line.isUncosted),
+      circularPath: [],
+      depth,
+    };
+
+    memo.set(id, costing);
+    return costing;
+  }
+
+  for (const node of nodes) resolve(node.id, []);
+  return memo;
+}
+
+/** Prices a single recipe with no sub-recipe lines. Thin wrapper over the graph engine. */
+export function costRecipe(lines: RecipeIngredientInput[], yieldQuantity: number, units: UnitRow[], yieldUnitCode: string | null = null): RecipeCosting {
+  const id = "__single__";
+  return (
+    costRecipeGraph([{ id, name: "", yieldQuantity, yieldUnitCode, lines }], units).get(id) ?? emptyCosting({ yieldQuantity, yieldUnitCode })
+  );
+}
+
+/**
+ * Every recipe reachable from `recipeId` through sub-recipe lines.
+ * Used to reject a component that would close a loop before it is saved.
+ */
+export function collectRecipeDependencies(recipeId: string, edges: Map<string, string[]>): Set<string> {
+  const seen = new Set<string>();
+  const queue = [...(edges.get(recipeId) ?? [])];
+  while (queue.length) {
+    const next = queue.shift()!;
+    if (seen.has(next)) continue;
+    seen.add(next);
+    queue.push(...(edges.get(next) ?? []));
+  }
+  return seen;
 }
 
 export type MenuEconomics = {

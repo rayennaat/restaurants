@@ -173,20 +173,39 @@ export const recipes = pgTable("recipes", {
   /** Number of servings/portions one production batch of this recipe yields. */
   yieldQuantity: numeric("yield_quantity", { precision: 18, scale: 3 }).notNull().default("1"),
   yieldUnitCode: text("yield_unit_code"),
+  /**
+   * A preparation (mayonnaise, stock, dough) is produced in batches and consumed
+   * by other recipes rather than sold directly. Dishes are the sellable end product.
+   */
+  isPreparation: boolean("is_preparation").notNull().default(false),
   notes: text("notes"),
   version: integer("version").notNull().default(1),
   isActive: boolean("is_active").notNull().default(true),
   ...timestamps,
 }, t => [index("recipes_org_idx").on(t.organizationId), uniqueIndex("recipes_org_name_uidx").on(t.organizationId, t.name)]);
 
+/**
+ * One line of a recipe. Each line targets EITHER a raw ingredient OR another
+ * recipe used as a sub-preparation — enforced by a check constraint. Sub-recipe
+ * lines are what let a burger consume mayonnaise without flattening it back
+ * into eggs and oil, so a change in oil price still reaches the burger.
+ */
 export const recipeIngredients = pgTable("recipe_ingredients", {
+  id: uuid("id").primaryKey().defaultRandom(),
   recipeId: uuid("recipe_id").notNull().references(() => recipes.id, { onDelete: "cascade" }),
-  ingredientId: uuid("ingredient_id").notNull().references(() => ingredients.id),
-  /** Quantity expressed in `unitCode`; converted to the ingredient base unit by the cost engine. */
+  ingredientId: uuid("ingredient_id").references(() => ingredients.id),
+  /** Set instead of `ingredientId` when this line consumes another recipe. */
+  componentRecipeId: uuid("component_recipe_id").references(() => recipes.id),
+  /** Quantity expressed in `unitCode`; converted by the cost engine. */
   quantity: numeric("quantity", { precision: 18, scale: 4 }).notNull(),
   unitCode: text("unit_code"),
   sortOrder: integer("sort_order").notNull().default(0),
-}, t => [primaryKey({ columns: [t.recipeId, t.ingredientId] })]);
+}, t => [
+  index("recipe_ingredients_recipe_idx").on(t.recipeId),
+  index("recipe_ingredients_component_idx").on(t.componentRecipeId),
+  uniqueIndex("recipe_ingredients_recipe_ingredient_uidx").on(t.recipeId, t.ingredientId),
+  uniqueIndex("recipe_ingredients_recipe_component_uidx").on(t.recipeId, t.componentRecipeId),
+]);
 
 export const menuItems = pgTable("menu_items", {
   id: uuid("id").primaryKey().defaultRandom(),

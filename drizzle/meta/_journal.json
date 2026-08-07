@@ -15,6 +15,13 @@
       "when": 1786067225884,
       "tag": "0001_profit_ops_expansion",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786129034349,
+      "tag": "0002_recipe_subrecipes",
+      "breakpoints": true
     }
   ]
 }

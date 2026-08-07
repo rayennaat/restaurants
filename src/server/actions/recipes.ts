@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { ingredients, menuItems, recipeIngredients, recipes } from "@/db/schema";
+import { collectRecipeDependencies } from "@/lib/costing";
 import { toMinorUnits } from "@/lib/money";
 import { menuItemInput, recipeInput } from "@/lib/validation";
 import { actionError, actionOk, toActionError, type ActionResult } from "@/server/action-result";
@@ -18,11 +19,12 @@ function revalidateRecipeViews(recipeId?: string) {
 }
 
 /**
- * Creates or updates a recipe and its ingredient lines.
+ * Creates or updates a recipe, its ingredient lines and its sub-recipe lines.
  *
- * Lines are replaced wholesale inside the transaction rather than diffed —
- * a recipe is small and its composite primary key makes a delete-then-insert
- * both simpler and safe against partial updates.
+ * Lines are replaced wholesale inside the transaction rather than diffed — a
+ * recipe is small, so delete-then-insert is simpler and safe against partial
+ * updates. Sub-recipe references are checked for cycles first: the database
+ * rejects direct self-reference, but A→B→A can only be caught here.
  */
 export async function saveRecipe(input: unknown): Promise<ActionResult<{ id: string }>> {
   try {
@@ -31,19 +33,63 @@ export async function saveRecipe(input: unknown): Promise<ActionResult<{ id: str
     const values = recipeInput.parse(input);
     const db = getDb();
 
-    // Verify every referenced ingredient belongs to this organization.
-    const ingredientIds = [...new Set(values.items.map(item => item.ingredientId))];
-    const owned = await db
-      .select({ id: ingredients.id })
-      .from(ingredients)
-      .where(and(eq(ingredients.organizationId, tenant.organizationId), inArray(ingredients.id, ingredientIds)));
-    if (owned.length !== ingredientIds.length) return actionError("One or more ingredients could not be found.");
+    const ingredientIds = [...new Set(values.items.flatMap(item => (item.kind === "ingredient" ? [item.ingredientId!] : [])))];
+    const componentIds = [...new Set(values.items.flatMap(item => (item.kind === "recipe" ? [item.componentRecipeId!] : [])))];
+
+    if (ingredientIds.length) {
+      const owned = await db
+        .select({ id: ingredients.id })
+        .from(ingredients)
+        .where(and(eq(ingredients.organizationId, tenant.organizationId), inArray(ingredients.id, ingredientIds)));
+      if (owned.length !== ingredientIds.length) return actionError("One or more ingredients could not be found.");
+    }
+
+    if (componentIds.length) {
+      const ownedRecipes = await db
+        .select({ id: recipes.id, name: recipes.name })
+        .from(recipes)
+        .where(and(eq(recipes.organizationId, tenant.organizationId), inArray(recipes.id, componentIds)));
+      if (ownedRecipes.length !== componentIds.length) return actionError("One or more preparations could not be found.");
+
+      if (values.id) {
+        if (componentIds.includes(values.id)) {
+          return actionError("A recipe cannot use itself as a preparation.", { items: "A recipe cannot use itself as a preparation." });
+        }
+
+        // Walk the existing graph: if any chosen component already depends on
+        // this recipe, adding it would close a loop that cannot be costed.
+        const edgeRows = await db
+          .select({ recipeId: recipeIngredients.recipeId, componentRecipeId: recipeIngredients.componentRecipeId })
+          .from(recipeIngredients)
+          .innerJoin(recipes, eq(recipes.id, recipeIngredients.recipeId))
+          .where(and(eq(recipes.organizationId, tenant.organizationId), isNotNull(recipeIngredients.componentRecipeId)));
+
+        const edges = new Map<string, string[]>();
+        for (const row of edgeRows) {
+          if (!row.componentRecipeId) continue;
+          const existing = edges.get(row.recipeId);
+          if (existing) existing.push(row.componentRecipeId);
+          else edges.set(row.recipeId, [row.componentRecipeId]);
+        }
+
+        for (const componentId of componentIds) {
+          const dependencies = collectRecipeDependencies(componentId, edges);
+          if (dependencies.has(values.id)) {
+            const name = ownedRecipes.find(row => row.id === componentId)?.name ?? "That preparation";
+            return actionError(`${name} already depends on this recipe, so adding it would create a circular reference.`, {
+              items: `${name} already depends on this recipe.`,
+            });
+          }
+        }
+      }
+    }
 
     const recipeId = await db.transaction(async tx => {
       const record = {
         name: values.name,
         yieldQuantity: String(values.yieldQuantity),
         yieldUnitCode: values.yieldUnitCode ?? null,
+        isPreparation: values.isPreparation,
         notes: values.notes ?? null,
         isActive: values.isActive,
         updatedAt: new Date(),
@@ -69,7 +115,8 @@ export async function saveRecipe(input: unknown): Promise<ActionResult<{ id: str
       await tx.insert(recipeIngredients).values(
         values.items.map((item, index) => ({
           recipeId: id!,
-          ingredientId: item.ingredientId,
+          ingredientId: item.kind === "ingredient" ? item.ingredientId! : null,
+          componentRecipeId: item.kind === "recipe" ? item.componentRecipeId! : null,
           quantity: String(item.quantity),
           unitCode: item.unitCode,
           sortOrder: index,
@@ -83,7 +130,7 @@ export async function saveRecipe(input: unknown): Promise<ActionResult<{ id: str
           action: values.id ? "update" : "create",
           entityType: "recipe",
           entityId: id,
-          metadata: { name: values.name, lineCount: values.items.length },
+          metadata: { name: values.name, ingredientLines: ingredientIds.length, componentLines: componentIds.length, isPreparation: values.isPreparation },
         },
         tx,
       );
@@ -126,6 +173,18 @@ export async function deleteRecipe(id: string): Promise<ActionResult> {
 
     const [linked] = await db.select({ id: menuItems.id }).from(menuItems).where(eq(menuItems.recipeId, id)).limit(1);
     if (linked) return actionError("A menu item still uses this recipe. Unlink it first, or archive the recipe instead.");
+
+    // Deleting a preparation that other recipes consume would strip cost from
+    // every dish above it, so block that too.
+    const [usedAsComponent] = await db
+      .select({ recipeName: recipes.name })
+      .from(recipeIngredients)
+      .innerJoin(recipes, eq(recipes.id, recipeIngredients.recipeId))
+      .where(eq(recipeIngredients.componentRecipeId, id))
+      .limit(1);
+    if (usedAsComponent) {
+      return actionError(`“${usedAsComponent.recipeName}” uses this as a preparation. Remove it there first, or archive this recipe instead.`);
+    }
 
     await db.delete(recipes).where(and(eq(recipes.id, id), eq(recipes.organizationId, tenant.organizationId)));
     await recordAudit({ organizationId: tenant.organizationId, userId: tenant.userId, action: "delete", entityType: "recipe", entityId: id });

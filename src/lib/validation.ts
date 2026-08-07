@@ -12,6 +12,7 @@ import { UNIT_DIMENSIONS } from "./units";
  */
 
 const uuid = z.string().uuid("Select a valid option");
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const optionalUuid = z
   .string()
   .trim()
@@ -159,25 +160,64 @@ export type PurchaseInput = z.infer<typeof purchaseInput>;
 
 // ---------------------------------------------------------------------- recipe
 
-export const recipeIngredientInput = z.object({
-  ingredientId: uuid,
-  quantity: positiveQuantity,
-  unitCode: unitCode,
-});
+/**
+ * One recipe line. `kind` selects the target: a raw ingredient, or another
+ * recipe used as a preparation. The unused id is dropped so the DB check
+ * constraint (exactly one target) is always satisfied.
+ */
+export const recipeIngredientInput = z
+  .object({
+    kind: z.enum(["ingredient", "recipe"]).default("ingredient"),
+    ingredientId: z.string().trim().optional(),
+    componentRecipeId: z.string().trim().optional(),
+    quantity: positiveQuantity,
+    unitCode: unitCode,
+  })
+  .superRefine((line, ctx) => {
+    if (line.kind === "recipe") {
+      if (!line.componentRecipeId || !UUID_RE.test(line.componentRecipeId)) {
+        ctx.addIssue({ code: "custom", path: ["componentRecipeId"], message: "Choose a preparation" });
+      }
+    } else if (!line.ingredientId || !UUID_RE.test(line.ingredientId)) {
+      ctx.addIssue({ code: "custom", path: ["ingredientId"], message: "Choose an ingredient" });
+    }
+  })
+  .transform(line =>
+    line.kind === "recipe"
+      ? { kind: "recipe" as const, componentRecipeId: line.componentRecipeId!, ingredientId: undefined, quantity: line.quantity, unitCode: line.unitCode }
+      : { kind: "ingredient" as const, ingredientId: line.ingredientId!, componentRecipeId: undefined, quantity: line.quantity, unitCode: line.unitCode },
+  );
 
 export const recipeInput = z.object({
   id: optionalUuid,
   name: shortText(120),
-  /** Servings produced by one batch. */
+  /** Servings or batch quantity produced by one production run. */
   yieldQuantity: positiveQuantity.default(1),
   yieldUnitCode: optionalText(24),
+  /** True for preparations consumed by other recipes rather than sold directly. */
+  isPreparation: z.coerce.boolean().default(false),
   notes: optionalText(2000),
   isActive: z.coerce.boolean().default(true),
   items: z
     .array(recipeIngredientInput)
-    .min(1, "A recipe needs at least one ingredient")
+    .min(1, "A recipe needs at least one line")
     .max(100)
-    .refine(items => new Set(items.map(item => item.ingredientId)).size === items.length, "Each ingredient can only be added once"),
+    .superRefine((items, ctx) => {
+      const seenIngredients = new Set<string>();
+      const seenRecipes = new Set<string>();
+      items.forEach((item, index) => {
+        const key = item.kind === "recipe" ? item.componentRecipeId! : item.ingredientId!;
+        const seen = item.kind === "recipe" ? seenRecipes : seenIngredients;
+        if (seen.has(key)) {
+          ctx.addIssue({
+            code: "custom",
+            path: [index, item.kind === "recipe" ? "componentRecipeId" : "ingredientId"],
+            message: item.kind === "recipe" ? "This preparation is already on the recipe" : "This ingredient is already on the recipe",
+          });
+        }
+        seen.add(key);
+      });
+    }),
 });
 export type RecipeInput = z.infer<typeof recipeInput>;
 
