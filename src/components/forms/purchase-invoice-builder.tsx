@@ -13,11 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { moneyInputStep, toMajorUnits } from "@/lib/money";
 import { compatibleUnits, type UnitRow } from "@/lib/units";
-import { purchaseInput, type PurchaseItemInput, type PurchaseInput } from "@/lib/validation";
+import { purchaseInput, type PurchaseInput } from "@/lib/validation";
 import { receivePurchase } from "@/server/actions/purchases";
 import type { IngredientOption } from "@/server/queries/ingredients";
-import type { SupplierOption, SupplierProductOption } from "@/server/queries/suppliers";
-import { formatQuantity } from "@/lib/units";
+import type { SupplierProductOption } from "@/server/queries/suppliers";
 
 type FormInput = z.input<typeof purchaseInput>;
 
@@ -180,7 +179,7 @@ export function PurchaseInvoiceBuilder({
       <div className="overflow-hidden rounded-2xl border bg-white">
         <div className="border-b px-5 py-4">
           <h2 className="font-black">Invoice lines</h2>
-          <p className="text-sm text-[var(--muted)]">Each line creates one stock movement and updates the ingredient's latest cost.</p>
+          <p className="text-sm text-[var(--muted)]">Each line creates one stock movement and updates the ingredient&apos;s latest cost.</p>
         </div>
         <div className="divide-y">
           {fields.map((field, index) => {

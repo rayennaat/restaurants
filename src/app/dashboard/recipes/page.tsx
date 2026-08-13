@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { RecipeDirectory } from "@/components/recipes/recipe-directory";
 import { listIngredientOptions } from "@/server/queries/ingredients";
 import { listRecipeOptions, listRecipesWithCosting } from "@/server/queries/recipes";
-import { can, getOrganizationUnits, requireTenant } from "@/server/tenant";
+import { hasPermission, getOrganizationUnits, requireTenant } from "@/server/tenant";
 
 export const metadata = { title: "Recipes" };
 
@@ -13,13 +13,12 @@ export default async function RecipesPage({ searchParams }: { searchParams: Prom
 
   const q = typeof params.q === "string" ? params.q : undefined;
   const status = params.status === "archived" || params.status === "all" ? params.status : "active";
-  const kind = params.kind === "dish" || params.kind === "preparation" ? params.kind : "all";
 
   const [recipes, ingredients, recipeOptions, totalCount] = await Promise.all([
-    listRecipesWithCosting(tenant.organizationId, units, { q, status, kind }),
+    listRecipesWithCosting(tenant.organizationId, units, { q, status }),
     listIngredientOptions(tenant.organizationId),
     listRecipeOptions(tenant.organizationId),
-    listRecipesWithCosting(tenant.organizationId, units, { status: "all", kind: "all" }).then(all => all.length),
+    listRecipesWithCosting(tenant.organizationId, units, { status: "all" }).then(all => all.length),
   ]);
 
   return (
@@ -27,7 +26,7 @@ export default async function RecipesPage({ searchParams }: { searchParams: Prom
       <PageHeader
         eyebrow="Kitchen"
         title="Recipes"
-        description="Build preparations like mayonnaise once, then use them inside your dishes. When an ingredient price changes, every recipe above it re-prices automatically."
+        description="Build a preparation like mayonnaise or stock once, then use it inside your dishes on the Menu page. When an ingredient price changes, every preparation and dish above it re-prices automatically."
       />
       <RecipeDirectory
         recipes={recipes}
@@ -35,7 +34,7 @@ export default async function RecipesPage({ searchParams }: { searchParams: Prom
         recipeOptions={recipeOptions}
         units={units}
         currency={tenant.currency}
-        canManage={can(tenant.role, "manage_catalog")}
+        canManage={hasPermission(tenant.role, "manage_recipes")}
         isEmptyDirectory={totalCount === 0}
       />
     </>

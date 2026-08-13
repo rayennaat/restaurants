@@ -5,8 +5,14 @@ import { getDb } from "@/db/client";
 import { locations, organizationMembers, organizations, units } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import type { UnitRow } from "@/lib/units";
+import { normalizeRole, type MemberRole } from "@/lib/permissions";
 
-export type MemberRole = "owner" | "manager" | "inventory" | "kitchen" | "accountant" | "viewer";
+/**
+ * Authorization policy lives in `lib/permissions` — pure, dependency-free and
+ * unit-tested. It is re-exported here so application code keeps importing
+ * authorization and tenancy from one module.
+ */
+export * from "@/lib/permissions";
 
 export type TenantContext = {
   userId: string;
@@ -75,7 +81,7 @@ export const getTenantContext = cache(async (): Promise<TenantState> => {
     organizationId: row.organizationId,
     organizationName: row.organizationName,
     locationId,
-    role: row.role,
+    role: normalizeRole(row.role),
     currency: row.currency,
     locale: row.locale,
     timezone: row.timezone,
@@ -99,26 +105,6 @@ export async function requireTenantLocation() {
   const tenant = await requireTenant();
   if (!tenant.locationId) redirect("/dashboard/settings?missing=location");
   return tenant as TenantContext & { locationId: string };
-}
-
-const WRITE_ROLES: Record<string, MemberRole[]> = {
-  // Catalog and commercial configuration.
-  manage_catalog: ["owner", "manager"],
-  // Day-to-day stock movements: receiving, waste, counts.
-  record_operations: ["owner", "manager", "inventory", "kitchen"],
-  // Organization-level settings, members, units, locations.
-  manage_settings: ["owner", "manager"],
-};
-
-export type Permission = keyof typeof WRITE_ROLES;
-
-export function can(role: MemberRole, permission: Permission) {
-  return WRITE_ROLES[permission].includes(role);
-}
-
-/** Throws inside server actions when the member's role is not allowed to write. */
-export function assertCan(role: MemberRole, permission: Permission) {
-  if (!can(role, permission)) throw new Error("Your role does not allow this action.");
 }
 
 /** Org-scoped unit table used by every quantity conversion. */

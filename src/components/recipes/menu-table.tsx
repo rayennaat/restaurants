@@ -2,8 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Plus, Trash2, UtensilsCrossed } from "lucide-react";
+import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Plus, Soup, Trash2, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 import { MenuItemForm } from "@/components/forms/menu-item-form";
 import { Badge } from "@/components/ui/badge";
@@ -14,18 +13,29 @@ import { Modal } from "@/components/ui/modal";
 import { Table, TBody, TD, TDNum, TH, THead, TR } from "@/components/ui/table";
 import { foodCostTone } from "@/lib/costing";
 import { formatMoney, formatPercent, toMajorUnits } from "@/lib/money";
+import type { UnitRow } from "@/lib/units";
 import { deleteMenuItem, setMenuItemArchived } from "@/server/actions/recipes";
+import type { PreparationCost } from "@/components/forms/composition-builder";
+import type { IngredientOption } from "@/server/queries/ingredients";
 import type { MenuItemRow } from "@/server/queries/menu";
+import { summarizeLines } from "@/server/queries/recipe-lines";
+import type { RecipeOption } from "@/server/queries/recipes";
 
 export function MenuTable({
   rows,
-  recipes,
+  ingredients,
+  preparations,
+  preparationCosts,
+  units,
   currency,
   canManage,
   isEmptyMenu,
 }: {
   rows: MenuItemRow[];
-  recipes: { id: string; name: string }[];
+  ingredients: IngredientOption[];
+  preparations: RecipeOption[];
+  preparationCosts: PreparationCost[];
+  units: UnitRow[];
   currency: string;
   canManage: boolean;
   isEmptyMenu: boolean;
@@ -50,8 +60,16 @@ export function MenuTable({
   }
 
   const createModal = (
-    <Modal open={creating} onClose={() => setCreating(false)} title="New menu item" description="Link a recipe to see real food cost and margin instead of a guess." size="lg">
-      <MenuItemForm recipes={recipes} currency={currency} onSaved={() => setCreating(false)} onCancel={() => setCreating(false)} />
+    <Modal open={creating} onClose={() => setCreating(false)} title="New menu item" description="Add what goes into it and see food cost and margin as you type." size="xl">
+      <MenuItemForm
+        ingredients={ingredients}
+        preparations={preparations}
+        preparationCosts={preparationCosts}
+        units={units}
+        currency={currency}
+        onSaved={() => setCreating(false)}
+        onCancel={() => setCreating(false)}
+      />
     </Modal>
   );
 
@@ -62,9 +80,9 @@ export function MenuTable({
           <EmptyState
             icon={UtensilsCrossed}
             title="No menu items yet"
-            description="Add what you sell and link it to a recipe. You will immediately see food cost percentage, gross profit and margin calculated from real ingredient prices."
+            description="Add what you sell and what goes into it. Food cost, gross profit and margin are calculated from real ingredient prices as you type."
             action={canManage ? <Button onClick={() => setCreating(true)}><Plus size={17} /> Add menu item</Button> : undefined}
-            secondaryAction={recipes.length === 0 ? { label: "Build a recipe first", href: "/dashboard/recipes" } : undefined}
+            secondaryAction={ingredients.length === 0 ? { label: "Add ingredients first", href: "/dashboard/ingredients" } : undefined}
           />
         </Card>
         {createModal}
@@ -87,7 +105,7 @@ export function MenuTable({
           <THead>
             <TR className="hover:bg-transparent">
               <TH>Item</TH>
-              <TH>Recipe</TH>
+              <TH>Made of</TH>
               <TH className="text-right">Selling price</TH>
               <TH className="text-right">Recipe cost</TH>
               <TH className="text-right">Food cost %</TH>
@@ -106,12 +124,13 @@ export function MenuTable({
                     {row.category && <span className="block text-xs text-[var(--muted)]">{row.category}</span>}
                   </TD>
                   <TD>
-                    {row.recipeName ? (
-                      <Link href="/dashboard/recipes" className="text-sm font-semibold text-green-800 hover:underline">
-                        {row.recipeName}
-                      </Link>
+                    {row.lines.length === 0 ? (
+                      <Badge tone="warning">Nothing added</Badge>
                     ) : (
-                      <Badge tone="warning">No recipe</Badge>
+                      <span className="flex items-center gap-1.5 text-sm text-[var(--muted)]">
+                        {row.lines.some(line => line.kind === "recipe") && <Soup size={13} className="shrink-0 text-amber-700" />}
+                        {summarizeLines(row.lines)}
+                      </span>
                     )}
                   </TD>
                   <TDNum className="font-semibold">{formatMoney(row.sellingPriceMillis, currency)}</TDNum>
@@ -172,20 +191,30 @@ export function MenuTable({
 
       {createModal}
 
-      <Modal open={Boolean(editing)} onClose={() => setEditing(null)} title={`Edit ${editing?.name ?? ""}`} size="lg">
+      <Modal open={Boolean(editing)} onClose={() => setEditing(null)} title={`Edit ${editing?.name ?? ""}`} size="xl">
         {editing && (
           <MenuItemForm
-            recipes={recipes}
+            ingredients={ingredients}
+            preparations={preparations}
+            preparationCosts={preparationCosts}
+            units={units}
             currency={currency}
             submitLabel="Save changes"
             defaultValues={{
               id: editing.id,
               name: editing.name,
               category: editing.category ?? "",
-              recipeId: editing.recipeId ?? "",
+              yieldQuantity: editing.yieldQuantity,
               sellingPrice: toMajorUnits(editing.sellingPriceMillis, currency),
               packagingCost: toMajorUnits(editing.packagingCostMillis, currency),
               isActive: editing.isActive,
+              items: editing.lines.map(line => ({
+                kind: line.kind,
+                ingredientId: line.kind === "ingredient" ? line.targetId : "",
+                componentRecipeId: line.kind === "recipe" ? line.targetId : "",
+                quantity: line.quantity,
+                unitCode: line.unitCode ?? line.baseUnitCode,
+              })),
             }}
             onSaved={() => setEditing(null)}
             onCancel={() => setEditing(null)}

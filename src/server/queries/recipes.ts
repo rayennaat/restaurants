@@ -1,78 +1,59 @@
-import { and, asc, eq, ilike, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { cache } from "react";
 import { getDb } from "@/db/client";
-import { ingredients, menuItems, recipeIngredients, recipes } from "@/db/schema";
-import { calculateMenuEconomics, costRecipeGraph, type MenuEconomics, type RecipeCosting, type RecipeGraphNode, type RecipeLineInput } from "@/lib/costing";
+import { ingredients, menuItemLines, menuItems, recipeIngredients, recipes } from "@/db/schema";
+import { costRecipeGraph, type RecipeCosting, type RecipeGraphNode, type RecipeLineInput } from "@/lib/costing";
 import type { UnitRow } from "@/lib/units";
+import { mapLineRow, push, type RecipeLineRow } from "./recipe-lines";
 
-/** One editable line of a recipe: either a raw ingredient or a sub-recipe. */
-export type RecipeLineRow = {
-  id: string;
-  kind: "ingredient" | "recipe";
-  /** Ingredient id, or component recipe id when `kind` is "recipe". */
-  targetId: string;
-  name: string;
-  quantity: number;
-  unitCode: string | null;
-  /** Ingredient base unit, or the component recipe's yield unit. */
-  baseUnitCode: string;
-  sortOrder: number;
-};
+export type { RecipeLineRow } from "./recipe-lines";
+
+/** Something that consumes a preparation: another preparation, or a dish. */
+export type PreparationConsumer = { id: string; name: string; kind: "recipe" | "menu_item" };
 
 export type RecipeWithCosting = {
   id: string;
   name: string;
   yieldQuantity: number;
   yieldUnitCode: string | null;
-  /** Preparations are produced in batches and consumed by other recipes. */
-  isPreparation: boolean;
   notes: string | null;
   isActive: boolean;
   updatedAt: Date;
   lines: RecipeLineRow[];
   costing: RecipeCosting;
-  /** Menu items selling this recipe, with their own economics. */
-  menuItems: { id: string; name: string; sellingPriceMillis: number; packagingCostMillis: number; economics: MenuEconomics }[];
-  /** Recipes that consume this one as a preparation. */
-  usedIn: { id: string; name: string }[];
+  /** Preparations and menu items that consume this one. */
+  usedIn: PreparationConsumer[];
 };
 
-type RecipeFilters = { q?: string; status?: "active" | "archived" | "all"; kind?: "all" | "dish" | "preparation" };
+type RecipeFilters = { q?: string; status?: "active" | "archived" | "all" };
 
 /**
- * Loads recipes with their lines and prices them against live ingredient costs.
+ * Every preparation in the org with its lines, in both shapes: the display rows
+ * a form renders and the costing inputs the engine consumes.
  *
- * Costs are never stored: reading a recipe always recomputes from
- * `ingredients.latest_unit_cost_millis`, so a purchase that changes a price
- * instantly re-prices every recipe and menu item that uses that ingredient.
- *
- * The whole organization's recipe graph is always loaded, even when filters
- * narrow the returned list, because a displayed dish may depend on a
- * preparation that the filter excludes.
+ * The whole graph is always loaded, never a filtered slice, because a displayed
+ * preparation may depend on one a filter would exclude. Cached per request so a
+ * page that lists preparations *and* prices menu items pays for it once.
  */
-export async function listRecipesWithCosting(organizationId: string, units: UnitRow[], filters: RecipeFilters = {}): Promise<RecipeWithCosting[]> {
+const loadPreparations = cache(async (organizationId: string) => {
   const db = getDb();
   const componentRecipes = alias(recipes, "component_recipes");
 
-  const recipeRows = await db
-    .select({
-      id: recipes.id,
-      name: recipes.name,
-      yieldQuantity: recipes.yieldQuantity,
-      yieldUnitCode: recipes.yieldUnitCode,
-      isPreparation: recipes.isPreparation,
-      notes: recipes.notes,
-      isActive: recipes.isActive,
-      updatedAt: recipes.updatedAt,
-    })
-    .from(recipes)
-    .where(eq(recipes.organizationId, organizationId))
-    .orderBy(asc(recipes.name));
-
-  if (!recipeRows.length) return [];
-  const allIds = recipeRows.map(row => row.id);
-
-  const [lineRows, menuRows] = await Promise.all([
+  const [recipeRows, lineRows] = await Promise.all([
+    db
+      .select({
+        id: recipes.id,
+        name: recipes.name,
+        yieldQuantity: recipes.yieldQuantity,
+        yieldUnitCode: recipes.yieldUnitCode,
+        notes: recipes.notes,
+        isActive: recipes.isActive,
+        updatedAt: recipes.updatedAt,
+      })
+      .from(recipes)
+      .where(eq(recipes.organizationId, organizationId))
+      .orderBy(asc(recipes.name)),
     db
       .select({
         id: recipeIngredients.id,
@@ -89,129 +70,96 @@ export async function listRecipesWithCosting(organizationId: string, units: Unit
         sortOrder: recipeIngredients.sortOrder,
       })
       .from(recipeIngredients)
+      .innerJoin(recipes, eq(recipes.id, recipeIngredients.recipeId))
       .leftJoin(ingredients, eq(ingredients.id, recipeIngredients.ingredientId))
       .leftJoin(componentRecipes, eq(componentRecipes.id, recipeIngredients.componentRecipeId))
-      .where(inArray(recipeIngredients.recipeId, allIds))
+      .where(eq(recipes.organizationId, organizationId))
       .orderBy(asc(recipeIngredients.sortOrder)),
-    db
-      .select({
-        id: menuItems.id,
-        recipeId: menuItems.recipeId,
-        name: menuItems.name,
-        sellingPriceMillis: menuItems.sellingPriceMillis,
-        packagingCostMillis: menuItems.packagingCostMillis,
-      })
-      .from(menuItems)
-      .where(and(eq(menuItems.organizationId, organizationId), eq(menuItems.isActive, true), inArray(menuItems.recipeId, allIds))),
   ]);
 
   const displayLines = new Map<string, RecipeLineRow[]>();
   const graphLines = new Map<string, RecipeLineInput[]>();
-  const usedIn = new Map<string, { id: string; name: string }[]>();
+  const usedIn = new Map<string, PreparationConsumer[]>();
   const nameById = new Map(recipeRows.map(row => [row.id, row.name]));
 
   for (const row of lineRows) {
-    const quantity = Number(row.quantity);
-
-    if (row.componentRecipeId) {
-      const name = row.componentName ?? "Unknown preparation";
-      push(displayLines, row.recipeId, {
-        id: row.id,
-        kind: "recipe",
-        targetId: row.componentRecipeId,
-        name,
-        quantity,
-        unitCode: row.unitCode,
-        baseUnitCode: row.componentYieldUnit ?? "",
-        sortOrder: row.sortOrder,
-      });
-      push(graphLines, row.recipeId, { kind: "recipe", componentRecipeId: row.componentRecipeId, componentName: name, quantity, unitCode: row.unitCode });
-      push(usedIn, row.componentRecipeId, { id: row.recipeId, name: nameById.get(row.recipeId) ?? "" });
-      continue;
-    }
-
-    // A line with neither target is impossible (DB check constraint), but the
-    // left join makes both sides nullable to TypeScript.
-    if (!row.ingredientId) continue;
-    const name = row.ingredientName ?? "Unknown ingredient";
-    const baseUnitCode = row.ingredientBaseUnit ?? "";
-    push(displayLines, row.recipeId, { id: row.id, kind: "ingredient", targetId: row.ingredientId, name, quantity, unitCode: row.unitCode, baseUnitCode, sortOrder: row.sortOrder });
-    push(graphLines, row.recipeId, {
-      kind: "ingredient",
-      ingredientId: row.ingredientId,
-      ingredientName: name,
-      quantity,
-      unitCode: row.unitCode,
-      baseUnitCode,
-      unitCostMillis: row.ingredientCostMillis ?? 0,
-    });
+    const mapped = mapLineRow(row);
+    if (!mapped) continue;
+    push(displayLines, row.recipeId, mapped.display);
+    push(graphLines, row.recipeId, mapped.graph);
+    if (row.componentRecipeId) push(usedIn, row.componentRecipeId, { id: row.recipeId, name: nameById.get(row.recipeId) ?? "", kind: "recipe" });
   }
 
-  const graph: RecipeGraphNode[] = recipeRows.map(row => ({
+  const nodes: RecipeGraphNode[] = recipeRows.map(row => ({
     id: row.id,
     name: row.name,
     yieldQuantity: Number(row.yieldQuantity),
     yieldUnitCode: row.yieldUnitCode,
     lines: graphLines.get(row.id) ?? [],
   }));
-  const costings = costRecipeGraph(graph, units);
 
+  return { recipeRows, displayLines, usedIn, nodes };
+});
+
+/** The preparation graph as the cost engine wants it, for pricing dishes. */
+export async function getPreparationGraph(organizationId: string): Promise<RecipeGraphNode[]> {
+  return (await loadPreparations(organizationId)).nodes;
+}
+
+/**
+ * Preparations priced against live ingredient costs.
+ *
+ * Costs are never stored: reading always recomputes from
+ * `ingredients.latest_unit_cost_millis`, so a purchase that changes a price
+ * instantly re-prices every preparation and every dish above it.
+ */
+export async function listRecipesWithCosting(organizationId: string, units: UnitRow[], filters: RecipeFilters = {}): Promise<RecipeWithCosting[]> {
+  const { recipeRows, displayLines, usedIn, nodes } = await loadPreparations(organizationId);
+  if (!recipeRows.length) return [];
+
+  // Dishes consuming a preparation, so its card can say where it is used.
+  const dishUsageRows = await getDb()
+    .select({ componentRecipeId: menuItemLines.componentRecipeId, menuItemId: menuItems.id, menuItemName: menuItems.name })
+    .from(menuItemLines)
+    .innerJoin(menuItems, eq(menuItems.id, menuItemLines.menuItemId))
+    .where(and(eq(menuItems.organizationId, organizationId), inArray(menuItemLines.componentRecipeId, recipeRows.map(row => row.id))));
+
+  const consumers = new Map(usedIn);
+  for (const row of dishUsageRows) {
+    if (!row.componentRecipeId) continue;
+    // Copy on write so the cached map from loadPreparations is never mutated.
+    consumers.set(row.componentRecipeId, [...(consumers.get(row.componentRecipeId) ?? []), { id: row.menuItemId, name: row.menuItemName, kind: "menu_item" }]);
+  }
+
+  const costings = costRecipeGraph(nodes, units);
   const search = filters.q?.trim().toLowerCase();
   const status = filters.status ?? "active";
-  const kind = filters.kind ?? "all";
 
   return recipeRows
     .filter(recipe => {
       if (status === "active" && !recipe.isActive) return false;
       if (status === "archived" && recipe.isActive) return false;
-      if (kind === "dish" && recipe.isPreparation) return false;
-      if (kind === "preparation" && !recipe.isPreparation) return false;
       if (search && !recipe.name.toLowerCase().includes(search)) return false;
       return true;
     })
-    .map(recipe => {
-      const lines = displayLines.get(recipe.id) ?? [];
-      const costing = costings.get(recipe.id)!;
-
-      return {
-        ...recipe,
-        yieldQuantity: Number(recipe.yieldQuantity),
-        lines,
-        costing,
-        usedIn: usedIn.get(recipe.id) ?? [],
-        menuItems: menuRows
-          .filter(item => item.recipeId === recipe.id)
-          .map(item => ({
-            id: item.id,
-            name: item.name,
-            sellingPriceMillis: item.sellingPriceMillis,
-            packagingCostMillis: item.packagingCostMillis,
-            economics: calculateMenuEconomics({
-              sellingPriceMillis: item.sellingPriceMillis,
-              recipeCostMillis: costing.costPerServingMillis,
-              packagingCostMillis: item.packagingCostMillis,
-              isCosted: lines.length > 0 && !costing.circularPath.length,
-            }),
-          })),
-      };
-    });
-}
-
-function push<T>(map: Map<string, T[]>, key: string, value: T) {
-  const existing = map.get(key);
-  if (existing) existing.push(value);
-  else map.set(key, [value]);
+    .map(recipe => ({
+      ...recipe,
+      yieldQuantity: Number(recipe.yieldQuantity),
+      lines: displayLines.get(recipe.id) ?? [],
+      costing: costings.get(recipe.id)!,
+      usedIn: consumers.get(recipe.id) ?? [],
+    }));
 }
 
 export async function getRecipeWithCosting(organizationId: string, id: string, units: UnitRow[]) {
-  const all = await listRecipesWithCosting(organizationId, units, { status: "all", kind: "all" });
+  const all = await listRecipesWithCosting(organizationId, units, { status: "all" });
   return all.find(recipe => recipe.id === id) ?? null;
 }
 
-/** Recipe picker options for linking a menu item, or for choosing a sub-recipe. */
+/** Preparation picker options, for a sub-preparation line or a dish line. */
 export async function listRecipeOptions(organizationId: string) {
   return getDb()
-    .select({ id: recipes.id, name: recipes.name, yieldQuantity: recipes.yieldQuantity, yieldUnitCode: recipes.yieldUnitCode, isPreparation: recipes.isPreparation })
+    .select({ id: recipes.id, name: recipes.name, yieldQuantity: recipes.yieldQuantity, yieldUnitCode: recipes.yieldUnitCode })
     .from(recipes)
     .where(and(eq(recipes.organizationId, organizationId), eq(recipes.isActive, true)))
     .orderBy(asc(recipes.name));

@@ -1,8 +1,9 @@
 import { PageHeader } from "@/components/dashboard/page-header";
+import { SectionNav } from "@/components/dashboard/section-nav";
 import { IngredientManager } from "@/components/ingredients/ingredient-manager";
 import { ingredientFilters } from "@/lib/validation";
 import { listIngredientCategories, listIngredients } from "@/server/queries/ingredients";
-import { can, getOrganizationUnits, requireTenant } from "@/server/tenant";
+import { hasPermission, getOrganizationUnits, requireTenant } from "@/server/tenant";
 
 export const metadata = { title: "Ingredients" };
 
@@ -24,16 +25,18 @@ export default async function IngredientsPage({ searchParams }: { searchParams: 
   return (
     <>
       <PageHeader
-        eyebrow="Catalog"
+        eyebrow="Inventory"
         title="Ingredients"
         description="Everything you buy, count and cook with. Costs here feed inventory value, recipe costing and menu margin."
       />
+
+      <SectionNav />
       <IngredientManager
         rows={rows}
         units={units}
         categories={categories}
         currency={tenant.currency}
-        canManage={can(tenant.role, "manage_catalog")}
+        canManage={hasPermission(tenant.role, "manage_ingredients")}
         isEmptyCatalog={unfilteredCount === 0}
       />
     </>

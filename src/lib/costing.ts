@@ -224,6 +224,43 @@ export function costRecipeGraph(nodes: RecipeGraphNode[], units: UnitRow[]): Map
   return memo;
 }
 
+/** A menu item plus its lines. Same shape as a recipe node, minus the yield unit. */
+export type MenuGraphNode = {
+  id: string;
+  name: string;
+  /** How many portions the lines produce. */
+  yieldQuantity: number;
+  lines: RecipeLineInput[];
+};
+
+/** Namespaces menu nodes so a menu item id can never shadow a recipe id in the graph. */
+const menuNodeId = (id: string) => `menu:${id}`;
+
+/**
+ * Prices menu items against the preparation graph.
+ *
+ * A menu item is a leaf: preparations feed into it and nothing consumes it, so it
+ * joins the same graph as an ordinary node and cannot introduce a cycle. Running
+ * one pass over preparations and dishes together means a preparation shared by
+ * twenty dishes is still costed once.
+ *
+ * The returned `costPerServingMillis` is the cost of one portion, which is what
+ * {@link calculateMenuEconomics} expects.
+ */
+export function costMenuItems(menuNodes: MenuGraphNode[], preparations: RecipeGraphNode[], units: UnitRow[]): Map<string, RecipeCosting> {
+  const graph = costRecipeGraph(
+    [...preparations, ...menuNodes.map(node => ({ ...node, id: menuNodeId(node.id), yieldUnitCode: null }))],
+    units,
+  );
+
+  const byMenuItemId = new Map<string, RecipeCosting>();
+  for (const node of menuNodes) {
+    const costing = graph.get(menuNodeId(node.id));
+    if (costing) byMenuItemId.set(node.id, costing);
+  }
+  return byMenuItemId;
+}
+
 /** Prices a single recipe with no sub-recipe lines. Thin wrapper over the graph engine. */
 export function costRecipe(lines: RecipeIngredientInput[], yieldQuantity: number, units: UnitRow[], yieldUnitCode: string | null = null): RecipeCosting {
   const id = "__single__";
@@ -258,7 +295,7 @@ export type MenuEconomics = {
   grossProfitMillis: number;
   foodCostPercent: number;
   grossMarginPercent: number;
-  /** False when the item has no recipe attached, so the numbers are incomplete. */
+  /** False when the item has no lines yet, so the numbers are incomplete. */
   isCosted: boolean;
 };
 
@@ -301,4 +338,34 @@ export function averageMargin(items: { sellingPriceMillis: number; totalCostMill
   const revenue = priced.reduce((total, item) => total + item.sellingPriceMillis, 0);
   const cost = priced.reduce((total, item) => total + item.totalCostMillis, 0);
   return calculateMargin(revenue, cost);
+}
+
+/**
+ * Menu-wide food cost percentage: total plate cost against total menu price.
+ *
+ * This is the same ratio {@link calculateFoodCostPercent} applies to one item,
+ * widened across the menu — it answers "what share of a typical sale goes to
+ * ingredients". It deliberately weights by menu price rather than by units sold,
+ * because the schema records no sales: there is no orders table, so a true
+ * period COGS-over-revenue food cost cannot be derived. Returns null when no
+ * item is both priced and costed, so callers show an empty state instead of 0%.
+ */
+export function menuFoodCostPercent(items: { sellingPriceMillis: number; totalCostMillis: number; isCosted: boolean }[]): number | null {
+  const usable = items.filter(item => item.isCosted && item.sellingPriceMillis > 0 && item.totalCostMillis > 0);
+  if (!usable.length) return null;
+  const revenue = usable.reduce((total, item) => total + item.sellingPriceMillis, 0);
+  const cost = usable.reduce((total, item) => total + item.totalCostMillis, 0);
+  return calculateFoodCostPercent(revenue, cost);
+}
+
+/**
+ * Revenue-weighted margin, or null when nothing can be measured.
+ *
+ * {@link averageMargin} returns 0 for an empty menu, which reads as "we make no
+ * money" rather than "we have nothing to measure yet". Dashboards use this.
+ */
+export function averageMarginOrNull(items: { sellingPriceMillis: number; totalCostMillis: number; isCosted: boolean }[]): number | null {
+  const usable = items.filter(item => item.isCosted && item.sellingPriceMillis > 0);
+  if (!usable.length) return null;
+  return averageMargin(usable);
 }

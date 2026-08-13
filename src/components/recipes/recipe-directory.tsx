@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Archive, ArchiveRestore, ChefHat, MoreHorizontal, Pencil, Plus, Soup, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, MoreHorizontal, Pencil, Plus, Soup, Trash2, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 import { RecipeForm } from "@/components/forms/recipe-form";
 import { Badge } from "@/components/ui/badge";
@@ -11,13 +11,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { Modal } from "@/components/ui/modal";
-import { foodCostTone } from "@/lib/costing";
-import { formatMoney, formatPercent } from "@/lib/money";
+import { formatMoney } from "@/lib/money";
 import { formatQuantity, type UnitRow } from "@/lib/units";
 import { deleteRecipe, setRecipeArchived } from "@/server/actions/recipes";
 import type { IngredientOption } from "@/server/queries/ingredients";
 import type { RecipeOption, RecipeWithCosting } from "@/server/queries/recipes";
 
+/**
+ * The preparation library: batches made once and consumed by dishes. Dishes are
+ * created and priced on the Menu page, so nothing here carries a selling price.
+ */
 export function RecipeDirectory({
   recipes,
   ingredients,
@@ -53,7 +56,13 @@ export function RecipeDirectory({
   }
 
   const createModal = (
-    <Modal open={creating} onClose={() => setCreating(false)} title="New recipe" description="Add ingredients or preparations — the cost calculates itself from live prices." size="xl">
+    <Modal
+      open={creating}
+      onClose={() => setCreating(false)}
+      title="New preparation"
+      description="A batch you make once and reuse across dishes. Its cost calculates itself from live ingredient prices."
+      size="xl"
+    >
       <RecipeForm ingredients={ingredients} preparations={recipeOptions} units={units} onSuccess={() => setCreating(false)} />
     </Modal>
   );
@@ -63,10 +72,10 @@ export function RecipeDirectory({
       <>
         <Card>
           <EmptyState
-            icon={ChefHat}
-            title="No recipes yet"
-            description="A recipe turns ingredient quantities into a real cost per serving. Build preparations like mayonnaise once, then reuse them inside your dishes."
-            action={canManage ? <Button onClick={() => setCreating(true)}><Plus size={17} /> Build your first recipe</Button> : undefined}
+            icon={Soup}
+            title="No preparations yet"
+            description="Preparations are the batches you make once and reuse — stock, sauce, dough. Build one here and every dish that uses it gets priced automatically. Dishes themselves are created on the Menu page."
+            action={canManage ? <Button onClick={() => setCreating(true)}><Plus size={17} /> Build your first preparation</Button> : undefined}
             secondaryAction={ingredients.length === 0 ? { label: "Add ingredients first", href: "/dashboard/ingredients" } : undefined}
           />
         </Card>
@@ -75,27 +84,12 @@ export function RecipeDirectory({
     );
   }
 
-  const dishes = recipes.filter(recipe => !recipe.isPreparation);
-  const preparations = recipes.filter(recipe => recipe.isPreparation);
-
-  const cardProps = { currency, canManage, onEdit: setEditing, runAction };
-
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <FilterBar
-          searchPlaceholder="Search recipes…"
+          searchPlaceholder="Search preparations…"
           filters={[
-            {
-              name: "kind",
-              label: "Type",
-              defaultValue: "all",
-              options: [
-                { value: "all", label: "All types" },
-                { value: "dish", label: "Dishes" },
-                { value: "preparation", label: "Preparations" },
-              ],
-            },
             {
               name: "status",
               label: "Status",
@@ -111,36 +105,21 @@ export function RecipeDirectory({
         />
         {canManage && (
           <Button onClick={() => setCreating(true)}>
-            <Plus size={17} /> New recipe
+            <Plus size={17} /> New preparation
           </Button>
         )}
       </div>
 
       {recipes.length === 0 ? (
         <Card>
-          <EmptyState icon={ChefHat} title="No recipes match these filters" description="Try clearing the search box or switching the type and status filters." />
+          <EmptyState icon={Soup} title="No preparations match these filters" description="Try clearing the search box or switching the status filter." />
         </Card>
       ) : (
-        <>
-          {dishes.length > 0 && (
-            <RecipeSection
-              icon={ChefHat}
-              title="Dishes"
-              description="What you sell. Link these to menu items to see food cost and margin."
-              recipes={dishes}
-              {...cardProps}
-            />
-          )}
-          {preparations.length > 0 && (
-            <RecipeSection
-              icon={Soup}
-              title="Preparations"
-              description="Made in batches and used inside other recipes. Their cost flows into every dish that consumes them."
-              recipes={preparations}
-              {...cardProps}
-            />
-          )}
-        </>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {recipes.map(recipe => (
+            <RecipeCard key={recipe.id} recipe={recipe} currency={currency} canManage={canManage} onEdit={setEditing} runAction={runAction} />
+          ))}
+        </div>
       )}
 
       {createModal}
@@ -150,7 +129,7 @@ export function RecipeDirectory({
           <RecipeForm
             recipe={editing}
             ingredients={ingredients}
-            // A recipe can never contain itself.
+            // A preparation can never contain itself.
             preparations={recipeOptions.filter(option => option.id !== editing.id)}
             units={units}
             onSuccess={() => setEditing(null)}
@@ -158,41 +137,6 @@ export function RecipeDirectory({
         )}
       </Modal>
     </div>
-  );
-}
-
-function RecipeSection({
-  icon: Icon,
-  title,
-  description,
-  recipes,
-  ...cardProps
-}: {
-  icon: typeof ChefHat;
-  title: string;
-  description: string;
-  recipes: RecipeWithCosting[];
-  currency: string;
-  canManage: boolean;
-  onEdit: (recipe: RecipeWithCosting) => void;
-  runAction: (promise: Promise<{ ok: boolean; error?: string }>, successMessage: string) => void;
-}) {
-  return (
-    <section>
-      <header className="mb-3">
-        <h2 className="flex items-center gap-2 text-lg font-black">
-          <Icon size={18} className="text-green-700" />
-          {title}
-          <span className="text-sm font-semibold text-[var(--muted)]">({recipes.length})</span>
-        </h2>
-        <p className="mt-0.5 text-sm text-[var(--muted)]">{description}</p>
-      </header>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {recipes.map(recipe => (
-          <RecipeCard key={recipe.id} recipe={recipe} {...cardProps} />
-        ))}
-      </div>
-    </section>
   );
 }
 
@@ -212,11 +156,12 @@ function RecipeCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const { costing } = recipe;
-  const primaryMenuItem = recipe.menuItems[0];
   const hasCycle = costing.circularPath.length > 0;
 
   const subRecipeCount = recipe.lines.filter(line => line.kind === "recipe").length;
   const ingredientCount = recipe.lines.length - subRecipeCount;
+  const usedByDishes = recipe.usedIn.filter(entry => entry.kind === "menu_item");
+  const usedByRecipes = recipe.usedIn.filter(entry => entry.kind === "recipe");
 
   return (
     <Card className="relative flex flex-col">
@@ -246,18 +191,18 @@ function RecipeCard({
             <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
             <div className="absolute right-4 top-14 z-20 w-52 overflow-hidden rounded-xl border bg-white py-1 shadow-xl">
               <button type="button" onClick={() => { setMenuOpen(false); onEdit(recipe); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-50">
-                <Pencil size={15} /> Edit recipe
+                <Pencil size={15} /> Edit preparation
               </button>
               <button
                 type="button"
-                onClick={() => { setMenuOpen(false); runAction(setRecipeArchived(recipe.id, recipe.isActive), recipe.isActive ? "Recipe archived" : "Recipe restored"); }}
+                onClick={() => { setMenuOpen(false); runAction(setRecipeArchived(recipe.id, recipe.isActive), recipe.isActive ? "Preparation archived" : "Preparation restored"); }}
                 className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-50"
               >
                 {recipe.isActive ? <><Archive size={15} /> Archive</> : <><ArchiveRestore size={15} /> Restore</>}
               </button>
               <button
                 type="button"
-                onClick={() => { setMenuOpen(false); if (confirm(`Permanently delete “${recipe.name}”?`)) runAction(deleteRecipe(recipe.id), "Recipe deleted"); }}
+                onClick={() => { setMenuOpen(false); if (confirm(`Permanently delete “${recipe.name}”?`)) runAction(deleteRecipe(recipe.id), "Preparation deleted"); }}
                 className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
               >
                 <Trash2 size={15} /> Delete
@@ -278,33 +223,29 @@ function RecipeCard({
               <b className="tabular-nums">{formatMoney(costing.totalCostMillis, currency)}</b>
             </div>
             <div className="rounded-xl bg-neutral-50 p-3">
-              <p className="text-xs text-[var(--muted)]">Per {recipe.yieldUnitCode ?? "serving"}</p>
+              <p className="text-xs text-[var(--muted)]">Per {recipe.yieldUnitCode ?? "portion"}</p>
               <b className="tabular-nums">{formatMoney(costing.costPerServingMillis, currency)}</b>
             </div>
           </div>
         )}
 
-        {recipe.isPreparation ? (
-          <p className="mt-3 rounded-xl bg-neutral-50 p-3 text-xs text-[var(--muted)]">
-            {recipe.usedIn.length > 0 ? <>Used in {recipe.usedIn.map(entry => entry.name).join(", ")}</> : <>Not used in any recipe yet.</>}
-          </p>
-        ) : primaryMenuItem ? (
-          <div className="mt-3 rounded-xl bg-green-50 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-xs font-semibold text-green-800">{primaryMenuItem.name}</p>
-              {primaryMenuItem.economics.isCosted && <Badge tone={foodCostTone(primaryMenuItem.economics.foodCostPercent)}>{formatPercent(primaryMenuItem.economics.foodCostPercent)} food cost</Badge>}
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-              <span className="text-[var(--muted)]">
-                Price <b className="block tabular-nums text-[var(--foreground)]">{formatMoney(primaryMenuItem.sellingPriceMillis, currency)}</b>
-              </span>
-              <span className="text-[var(--muted)]">
-                Profit <b className="block tabular-nums text-green-800">{formatMoney(primaryMenuItem.economics.grossProfitMillis, currency)}</b>
-              </span>
-            </div>
+        {recipe.usedIn.length > 0 ? (
+          <div className="mt-3 space-y-1.5 rounded-xl bg-neutral-50 p-3 text-xs text-[var(--muted)]">
+            {usedByDishes.length > 0 && (
+              <p className="flex items-start gap-1.5">
+                <UtensilsCrossed size={13} className="mt-0.5 shrink-0 text-green-700" />
+                <span>Sold in {usedByDishes.map(entry => entry.name).join(", ")}</span>
+              </p>
+            )}
+            {usedByRecipes.length > 0 && (
+              <p className="flex items-start gap-1.5">
+                <Soup size={13} className="mt-0.5 shrink-0 text-amber-700" />
+                <span>Used by {usedByRecipes.map(entry => entry.name).join(", ")}</span>
+              </p>
+            )}
           </div>
         ) : (
-          <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900">No menu item linked — add one to see food cost % and margin.</p>
+          <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900">Not used yet — add it to a dish on the Menu page to see it earn.</p>
         )}
 
         {!hasCycle && costing.hasUncostedIngredient && (

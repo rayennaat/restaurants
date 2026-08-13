@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Boxes, Coins, PackagePlus, PackageSearch, TrendingDown } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { SectionNav } from "@/components/dashboard/section-nav";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -26,9 +27,9 @@ export default async function InventoryPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Stock control"
+        eyebrow="Operations"
         title="Inventory"
-        description="Every balance is calculated from the append-only stock movement ledger — never edited in place."
+        description="What you hold right now, and what it is worth. Every balance is built from the purchases, sales, waste and counts you record — never typed in by hand."
         action={
           <Link href="/dashboard/purchases?view=new">
             <Button>
@@ -37,6 +38,8 @@ export default async function InventoryPage() {
           </Link>
         }
       />
+
+      <SectionNav />
 
       {inventory.length === 0 ? (
         <Card>
@@ -68,7 +71,7 @@ export default async function InventoryPage() {
             <Card className="overflow-hidden">
               <CardHeader>
                 <h2 className="text-lg font-black">Recent movements</h2>
-                <p className="text-sm text-[var(--muted)]">The ledger behind the balances.</p>
+                <p className="text-sm text-[var(--muted)]">Everything that moved this stock in or out.</p>
               </CardHeader>
               <MovementLedger rows={movements} currency={tenant.currency} />
             </Card>

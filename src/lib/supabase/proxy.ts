@@ -1,7 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isDemoMode } from "@/lib/demo-mode";
 export async function updateSession(request: NextRequest) {
-  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") return NextResponse.next({ request });
+  // Preview builds have no Supabase project to talk to. Never true in a
+  // production build — see `lib/demo-mode`.
+  if (isDemoMode()) return NextResponse.next({ request });
   let response = NextResponse.next({ request });
   const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
     cookies: {

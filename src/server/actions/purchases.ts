@@ -3,13 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { ingredients, purchaseItems, purchases, stockMovements, supplierProducts } from "@/db/schema";
+import { ingredients, purchaseItems, purchases, stockMovements, supplierProducts, suppliers } from "@/db/schema";
 import { toMinorUnits, minorUnitScale } from "@/lib/money";
 import { toBaseQuantity, toBaseUnitCost } from "@/lib/units";
 import { purchaseInput } from "@/lib/validation";
 import { actionError, actionOk, toActionError, type ActionResult } from "@/server/action-result";
 import { recordAudit } from "@/server/audit";
-import { assertCan, getOrganizationUnits, requireTenantLocation } from "@/server/tenant";
+import { assertMemberLocation } from "@/server/queries/locations";
+import { getOrganizationUnits, requirePermission, requireTenantLocation } from "@/server/tenant";
 
 function revalidatePurchaseViews(purchaseId?: string) {
   revalidatePath("/dashboard");
@@ -33,12 +34,23 @@ function revalidatePurchaseViews(purchaseId?: string) {
  *     per-base-unit price paid.
  *  4. Refreshes `supplier_products.last_price_millis` and
  *     `last_purchased_at` for every (supplier, ingredient) pair on the invoice.
+ *
+ * The invoice states which location took delivery, and that location is checked
+ * against the caller before anything is written — it belongs to their
+ * organization, and a site-bound member may only receive at their own site.
+ * Previously the field was validated and then ignored in favour of the member's
+ * default location, so a manager receiving a delivery at the Annex silently
+ * added the stock to Main: no authorization hole, but every downstream figure —
+ * on-hand balance, valuation, that site's next count variance — was wrong for
+ * both branches.
  */
 export async function receivePurchase(input: unknown): Promise<ActionResult<{ id: string }>> {
   try {
     const tenant = await requireTenantLocation();
-    assertCan(tenant.role, "record_operations");
+    requirePermission(tenant.role, "manage_purchasing");
     const values = purchaseInput.parse(input);
+    await assertMemberLocation(tenant, values.locationId, "receive purchases");
+    const locationId = values.locationId;
     const db = getDb();
     const units = await getOrganizationUnits(tenant.organizationId);
     const scale = minorUnitScale(tenant.currency);
@@ -56,6 +68,27 @@ export async function receivePurchase(input: unknown): Promise<ActionResult<{ id
       return actionError(`Ingredient${missing.length > 1 ? "s" : ""} not found: ${missing.join(", ")}.`);
     }
     const ingredientMap = new Map(ingredientRows.map(row => [row.id, row]));
+
+    /**
+     * The supplier, if one was named, must belong to this organization too.
+     *
+     * `purchases.supplier_id` has a foreign key but no tenant constraint — the
+     * database cannot express "same organization as the purchase" — so without
+     * this an invoice could be filed against another workspace's supplier. The
+     * purchase list and detail screens join that row for its name, which turned
+     * a cross-tenant *write* into a cross-tenant *read*: someone else's supplier
+     * name rendered inside this workspace, and this workspace's spend attributed
+     * to a supplier its owner cannot see.
+     */
+    const supplierId = values.supplierId ?? null;
+    if (supplierId) {
+      const [supplier] = await db
+        .select({ id: suppliers.id })
+        .from(suppliers)
+        .where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, tenant.organizationId)))
+        .limit(1);
+      if (!supplier) return actionError("Supplier not found.", { supplierId: "Select a supplier from this workspace." });
+    }
 
     const purchaseId = await db.transaction(async tx => {
       // 1. Compute line totals and the invoice-level aggregate.
@@ -89,8 +122,8 @@ export async function receivePurchase(input: unknown): Promise<ActionResult<{ id
         .insert(purchases)
         .values({
           organizationId: tenant.organizationId,
-          locationId: tenant.locationId,
-          supplierId: values.supplierId ?? null,
+          locationId,
+          supplierId,
           invoiceNumber: values.invoiceNumber ?? null,
           status: "received",
           totalMillis,
@@ -120,7 +153,7 @@ export async function receivePurchase(input: unknown): Promise<ActionResult<{ id
       for (const line of lines) {
         await tx.insert(stockMovements).values({
           organizationId: tenant.organizationId,
-          locationId: tenant.locationId,
+          locationId,
           ingredientId: line.ingredientId,
           type: "purchase",
           quantity: line.baseQuantity, // ledger entries are always base-unit
@@ -134,13 +167,12 @@ export async function receivePurchase(input: unknown): Promise<ActionResult<{ id
       }
 
       // 5. Update ingredient latest cost and supplier product pricing.
-      const supplierId = values.supplierId ?? null;
       for (const line of lines) {
         if (line.baseUnitCostMillis && line.baseUnitCostMillis > 0) {
           await tx
             .update(ingredients)
             .set({ latestUnitCostMillis: line.baseUnitCostMillis, updatedAt: new Date() })
-            .where(eq(ingredients.id, line.ingredientId));
+            .where(and(eq(ingredients.id, line.ingredientId), eq(ingredients.organizationId, tenant.organizationId)));
         }
 
         if (supplierId) {
@@ -153,7 +185,13 @@ export async function receivePurchase(input: unknown): Promise<ActionResult<{ id
               packQuantity: line.quantity,
               updatedAt: new Date(),
             })
-            .where(and(eq(supplierProducts.supplierId, supplierId), eq(supplierProducts.ingredientId, line.ingredientId)));
+            .where(
+              and(
+                eq(supplierProducts.organizationId, tenant.organizationId),
+                eq(supplierProducts.supplierId, supplierId),
+                eq(supplierProducts.ingredientId, line.ingredientId),
+              ),
+            );
         }
       }
 
@@ -164,7 +202,7 @@ export async function receivePurchase(input: unknown): Promise<ActionResult<{ id
           action: "create",
           entityType: "purchase",
           entityId: purchase.id,
-          metadata: { supplierId, lineCount: lines.length, totalMillis },
+          metadata: { supplierId, locationId, lineCount: lines.length, totalMillis },
         },
         tx,
       );

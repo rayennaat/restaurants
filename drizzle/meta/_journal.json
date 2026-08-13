@@ -22,6 +22,62 @@
       "when": 1786129034349,
       "tag": "0002_recipe_subrecipes",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786144553417,
+      "tag": "0003_menu_item_composition",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786438800000,
+      "tag": "0004_team_invitations",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786442400000,
+      "tag": "0005_stock_counts",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786478400000,
+      "tag": "0006_sales",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786564800000,
+      "tag": "0007_sales_import",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786651200000,
+      "tag": "0008_stock_transfers",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786737600000,
+      "tag": "0009_audit_log_immutability",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786813200000,
+      "tag": "0010_tenant_integrity",
+      "breakpoints": true
     }
   ]
 }

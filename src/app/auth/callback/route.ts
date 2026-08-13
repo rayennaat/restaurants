@@ -1,3 +1,27 @@
 import { createClient } from "@/lib/supabase/server";
+import { safeNextPathOr } from "@/lib/redirects";
 import { NextResponse } from "next/server";
-export async function GET(request: Request) { const { searchParams, origin } = new URL(request.url); const code = searchParams.get("code"); if (code) { const supabase = await createClient(); await supabase.auth.exchangeCodeForSession(code); } return NextResponse.redirect(`${origin}/onboarding`); }
+
+/**
+ * Supabase auth callback.
+ *
+ * Honours a `next` destination so an invited employee returns to the invitation
+ * they came from instead of being sent to workspace creation — which would have
+ * them build a second, empty organization rather than joining the one that
+ * invited them.
+ *
+ * `next` is attacker-controllable, so it is validated by `safeNextPathOr`, which
+ * accepts a same-origin path and nothing else — see `lib/redirects` for the two
+ * shapes (`/\host`, and a tab that collapses into `//host`) that the obvious
+ * "starts with a slash" check lets through. Anything rejected falls back to
+ * onboarding rather than becoming an open redirect.
+ */
+export async function GET(request: Request) {
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get("code");
+  if (code) {
+    const supabase = await createClient();
+    await supabase.auth.exchangeCodeForSession(code);
+  }
+  return NextResponse.redirect(`${origin}${safeNextPathOr(searchParams.get("next"), "/onboarding")}`);
+}

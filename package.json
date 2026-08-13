@@ -15,12 +15,14 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "verify:integrity": "tsx scripts/verify-integrity.ts",
+    "verify:security": "tsx scripts/verify-security.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
-    "@serwist/next": "^9.5.12",
     "@sentry/nextjs": "^10.5.0",
+    "@serwist/next": "^9.5.12",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.9",
     "@tanstack/react-query": "^5.101.4",
@@ -28,9 +30,10 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dexie": "^4.4.4",
+    "dotenv": "^17.2.1",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.539.0",
-    "next": "^16.2.12",
+    "next": "^16.3.0",
     "next-intl": "^4.13.4",
     "postgres": "^3.4.7",
     "react": "^19.2.8",
@@ -39,8 +42,7 @@
     "recharts": "^3.1.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
-    "zod": "^4.0.17",
-    "dotenv": "^17.2.1"
+    "zod": "^4.0.17"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
@@ -48,14 +50,17 @@
     "@types/node": "^22.15.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9.34.0",
-    "eslint-config-next": "^16.2.12",
+    "eslint-config-next": "^16.3.0",
     "jsdom": "^26.1.0",
     "serwist": "^9.5.12",
     "tailwindcss": "^4.1.12",
     "tsx": "^4.20.4",
     "typescript": "^5.9.2",
-    "vitest": "^3.2.4",
-    "drizzle-kit": "^0.31.10"
+    "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "nanoid": "3.3.17"
   }
 }

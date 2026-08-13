@@ -10,7 +10,8 @@ import { slugify } from "@/lib/utils";
 import { locationInput, onboardingInput, organizationSettingsInput, unitInput } from "@/lib/validation";
 import { actionError, actionOk, toActionError, type ActionResult } from "@/server/action-result";
 import { recordAudit } from "@/server/audit";
-import { assertCan, requireTenant } from "@/server/tenant";
+import { requirePermission, requireTenant } from "@/server/tenant";
+import { ActionError } from "@/lib/action-error";
 
 const TIMEZONE_BY_LOCALE: Record<string, string> = { "fr-TN": "Africa/Tunis", "ar-TN": "Africa/Tunis", "fr-FR": "Europe/Paris", "en-US": "America/New_York" };
 
@@ -69,11 +70,13 @@ export async function createWorkspace(_prev: unknown, formData: FormData): Promi
 export async function completeSetup(): Promise<ActionResult> {
   try {
     const tenant = await requireTenant();
-    assertCan(tenant.role, "manage_settings");
+    requirePermission(tenant.role, "manage_settings");
     if (tenant.onboardingCompletedAt) return actionOk();
 
-    await getDb().update(organizations).set({ onboardingCompletedAt: new Date(), updatedAt: new Date() }).where(eq(organizations.id, tenant.organizationId));
-    await recordAudit({ organizationId: tenant.organizationId, userId: tenant.userId, action: "complete_setup", entityType: "organization", entityId: tenant.organizationId });
+    await getDb().transaction(async tx => {
+      await tx.update(organizations).set({ onboardingCompletedAt: new Date(), updatedAt: new Date() }).where(eq(organizations.id, tenant.organizationId));
+      await recordAudit({ organizationId: tenant.organizationId, userId: tenant.userId, action: "complete_setup", entityType: "organization", entityId: tenant.organizationId }, tx);
+    });
 
     revalidatePath("/", "layout");
     return actionOk();
@@ -86,8 +89,11 @@ export async function completeSetup(): Promise<ActionResult> {
 export async function reopenSetup(): Promise<ActionResult> {
   try {
     const tenant = await requireTenant();
-    assertCan(tenant.role, "manage_settings");
-    await getDb().update(organizations).set({ onboardingCompletedAt: null, updatedAt: new Date() }).where(eq(organizations.id, tenant.organizationId));
+    requirePermission(tenant.role, "manage_settings");
+    await getDb().transaction(async tx => {
+      await tx.update(organizations).set({ onboardingCompletedAt: null, updatedAt: new Date() }).where(eq(organizations.id, tenant.organizationId));
+      await recordAudit({ organizationId: tenant.organizationId, userId: tenant.userId, action: "reopen_setup", entityType: "organization", entityId: tenant.organizationId }, tx);
+    });
     revalidatePath("/", "layout");
     return actionOk();
   } catch (error) {
@@ -98,15 +104,16 @@ export async function reopenSetup(): Promise<ActionResult> {
 export async function updateOrganization(_prev: unknown, formData: FormData): Promise<ActionResult> {
   try {
     const tenant = await requireTenant();
-    assertCan(tenant.role, "manage_settings");
+    requirePermission(tenant.role, "manage_settings");
     const input = organizationSettingsInput.parse(Object.fromEntries(formData));
 
-    await getDb()
-      .update(organizations)
-      .set({ name: input.name, currency: input.currency, locale: input.locale, timezone: input.timezone, updatedAt: new Date() })
-      .where(eq(organizations.id, tenant.organizationId));
-
-    await recordAudit({ organizationId: tenant.organizationId, userId: tenant.userId, action: "update", entityType: "organization", entityId: tenant.organizationId });
+    await getDb().transaction(async tx => {
+      await tx
+        .update(organizations)
+        .set({ name: input.name, currency: input.currency, locale: input.locale, timezone: input.timezone, updatedAt: new Date() })
+        .where(eq(organizations.id, tenant.organizationId));
+      await recordAudit({ organizationId: tenant.organizationId, userId: tenant.userId, action: "update", entityType: "organization", entityId: tenant.organizationId }, tx);
+    });
     revalidatePath("/", "layout");
     return actionOk();
   } catch (error) {
@@ -117,21 +124,29 @@ export async function updateOrganization(_prev: unknown, formData: FormData): Pr
 export async function saveLocation(_prev: unknown, formData: FormData): Promise<ActionResult> {
   try {
     const tenant = await requireTenant();
-    assertCan(tenant.role, "manage_settings");
+    requirePermission(tenant.role, "manage_settings");
     const raw = Object.fromEntries(formData);
     const input = locationInput.parse({ ...raw, isActive: raw.isActive === undefined ? true : raw.isActive === "on" || raw.isActive === "true" });
 
-    const db = getDb();
-    if (input.id) {
-      await db
-        .update(locations)
-        .set({ name: input.name, address: input.address ?? null, isActive: input.isActive, updatedAt: new Date() })
-        .where(and(eq(locations.id, input.id), eq(locations.organizationId, tenant.organizationId)));
-    } else {
-      await db.insert(locations).values({ organizationId: tenant.organizationId, name: input.name, address: input.address ?? null, isActive: input.isActive });
-    }
+    await getDb().transaction(async tx => {
+      let savedId = input.id ?? null;
+      if (input.id) {
+        const [updated] = await tx
+          .update(locations)
+          .set({ name: input.name, address: input.address ?? null, isActive: input.isActive, updatedAt: new Date() })
+          .where(and(eq(locations.id, input.id), eq(locations.organizationId, tenant.organizationId)))
+          .returning({ id: locations.id });
+        if (!updated) throw new ActionError("Location not found.");
+      } else {
+        const [created] = await tx
+          .insert(locations)
+          .values({ organizationId: tenant.organizationId, name: input.name, address: input.address ?? null, isActive: input.isActive })
+          .returning({ id: locations.id });
+        savedId = created.id;
+      }
 
-    await recordAudit({ organizationId: tenant.organizationId, userId: tenant.userId, action: input.id ? "update" : "create", entityType: "location", entityId: input.id ?? null });
+      await recordAudit({ organizationId: tenant.organizationId, userId: tenant.userId, action: input.id ? "update" : "create", entityType: "location", entityId: savedId }, tx);
+    });
     revalidatePath("/dashboard/settings");
     return actionOk();
   } catch (error) {
@@ -142,27 +157,31 @@ export async function saveLocation(_prev: unknown, formData: FormData): Promise<
 export async function saveUnit(_prev: unknown, formData: FormData): Promise<ActionResult> {
   try {
     const tenant = await requireTenant();
-    assertCan(tenant.role, "manage_settings");
+    requirePermission(tenant.role, "manage_settings");
     const input = unitInput.parse(Object.fromEntries(formData));
-    const db = getDb();
+    await getDb().transaction(async tx => {
+      let unitId = input.id ?? null;
+      if (input.id) {
+        const [updated] = await tx
+          .update(units)
+          .set({ code: input.code, name: input.name, dimension: input.dimension, multiplierToBase: String(input.multiplierToBase) })
+          .where(and(eq(units.id, input.id), eq(units.organizationId, tenant.organizationId)))
+          .returning({ id: units.id });
+        if (!updated) throw new ActionError("Unit not found.");
+      } else {
+        const [created] = await tx.insert(units).values({
+          organizationId: tenant.organizationId,
+          code: input.code,
+          name: input.name,
+          dimension: input.dimension,
+          multiplierToBase: String(input.multiplierToBase),
+          isBase: input.multiplierToBase === 1,
+        }).returning({ id: units.id });
+        unitId = created.id;
+      }
 
-    if (input.id) {
-      await db
-        .update(units)
-        .set({ code: input.code, name: input.name, dimension: input.dimension, multiplierToBase: String(input.multiplierToBase) })
-        .where(and(eq(units.id, input.id), eq(units.organizationId, tenant.organizationId)));
-    } else {
-      await db.insert(units).values({
-        organizationId: tenant.organizationId,
-        code: input.code,
-        name: input.name,
-        dimension: input.dimension,
-        multiplierToBase: String(input.multiplierToBase),
-        isBase: input.multiplierToBase === 1,
-      });
-    }
-
-    await recordAudit({ organizationId: tenant.organizationId, userId: tenant.userId, action: input.id ? "update" : "create", entityType: "unit", metadata: { code: input.code } });
+      await recordAudit({ organizationId: tenant.organizationId, userId: tenant.userId, action: input.id ? "update" : "create", entityType: "unit", entityId: unitId, metadata: { code: input.code } }, tx);
+    });
     revalidatePath("/dashboard/settings");
     revalidatePath("/dashboard/ingredients");
     return actionOk();
@@ -171,12 +190,41 @@ export async function saveUnit(_prev: unknown, formData: FormData): Promise<Acti
   }
 }
 
+/**
+ * Removes a unit of measure.
+ *
+ * Audited inside the transaction: every quantity conversion in the app resolves
+ * through this table, so losing a unit silently changes how purchases, recipes
+ * and counts are interpreted. The code is captured before the delete because
+ * afterwards there is nothing left to name in the record.
+ */
 export async function deleteUnit(id: string): Promise<ActionResult> {
   try {
     const tenant = await requireTenant();
-    assertCan(tenant.role, "manage_settings");
-    await getDb().delete(units).where(and(eq(units.id, id), eq(units.organizationId, tenant.organizationId)));
+    requirePermission(tenant.role, "manage_settings");
+
+    await getDb().transaction(async tx => {
+      const [deleted] = await tx
+        .delete(units)
+        .where(and(eq(units.id, id), eq(units.organizationId, tenant.organizationId)))
+        .returning({ code: units.code, name: units.name });
+      if (!deleted) throw new ActionError("Unit not found.");
+
+      await recordAudit(
+        {
+          organizationId: tenant.organizationId,
+          userId: tenant.userId,
+          action: "delete",
+          entityType: "unit",
+          entityId: id,
+          metadata: { code: deleted.code, name: deleted.name },
+        },
+        tx,
+      );
+    });
+
     revalidatePath("/dashboard/settings");
+    revalidatePath("/dashboard/ingredients");
     return actionOk();
   } catch (error) {
     return toActionError(error);

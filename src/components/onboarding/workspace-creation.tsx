@@ -24,8 +24,13 @@ function SubmitButton() {
  * First screen for a signed-in user with no organization. Posts to the
  * `createWorkspace` server action, which provisions the org, its first
  * location, the owner membership and the standard units in one transaction.
+ *
+ * `pendingInvitations` names any workspaces that have invited this address.
+ * Creating a new workspace while one is outstanding is allowed but rarely
+ * intended — the oldest membership wins when resolving the tenant, so an
+ * employee who does both would keep landing in their own empty organization.
  */
-export function WorkspaceCreation() {
+export function WorkspaceCreation({ pendingInvitations = [] }: { pendingInvitations?: string[] }) {
   const router = useRouter();
   const [state, formAction] = useActionState(createWorkspace, null);
 
@@ -49,6 +54,18 @@ export function WorkspaceCreation() {
         <p className="mb-7 mt-2 text-[var(--muted)]">
           We will create your organization, first location and standard units. You can add more locations and change any of this later in Settings.
         </p>
+
+        {pendingInvitations.length > 0 && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+            <p className="text-sm font-bold text-amber-900">
+              You have been invited to {pendingInvitations.join(", ")}
+            </p>
+            <p className="mt-1 text-sm text-amber-900/80">
+              To join as an employee, open the invitation link that was shared with you instead of creating a new
+              workspace. Creating one here makes a separate, empty restaurant that only you can see.
+            </p>
+          </div>
+        )}
 
         <form action={formAction} className="space-y-4">
           <Field label="Restaurant or group name" required>

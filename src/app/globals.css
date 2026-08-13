@@ -13,6 +13,25 @@
 
 * { border-color: var(--border); }
 html { background: var(--background); }
+
+/*
+ * A single visible focus ring for the whole application.
+ *
+ * `:focus-visible` rather than `:focus`, so it appears for keyboard and
+ * programmatic focus but not on mouse clicks — the reason the browser default
+ * gets switched off in the first place. Declaring it once here means every
+ * button, link, input and disclosure gets the same affordance without each
+ * component remembering to ask for it.
+ *
+ * The offset keeps the ring clear of the element's own border, which matters on
+ * the rounded controls used throughout.
+ */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 body {
   margin: 0;
   background:

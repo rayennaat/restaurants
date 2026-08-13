@@ -1,115 +1,551 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Coins, PackageSearch, TrendingUp } from "lucide-react";
+import { AlertTriangle, ArrowRight, ChefHat, Coins, PackageSearch, Percent, Receipt, ReceiptText, ShoppingCart, TrendingUp, Trash2, UtensilsCrossed } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { AnalyticsFilters } from "@/components/dashboard/analytics-filters";
+import { KpiCard } from "@/components/dashboard/kpi-card";
+import { Section } from "@/components/dashboard/section";
 import { WasteChart } from "@/components/charts/waste-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { averageMargin } from "@/lib/costing";
+import { Table, TBody, TD, TDNum, TH, THead, TR } from "@/components/ui/table";
+import { averageMarginOrNull, foodCostTone, menuFoodCostPercent } from "@/lib/costing";
+import { bucketLabel } from "@/lib/date-range";
 import { formatMoney, formatPercent } from "@/lib/money";
 import { formatQuantity } from "@/lib/units";
-import { getInventory, getWasteTrend, inventoryValue, lowStockRows } from "@/server/queries/inventory";
+import { wasteReasonLabel } from "@/lib/waste-reasons";
+import { getAnalyticsContext, type AnalyticsSearchParams } from "@/server/analytics-context";
+import {
+  getInventorySnapshot,
+  getPurchaseTotals,
+  getSupplierPriceChanges,
+  getWasteByReason,
+  getWasteSummary,
+  getWasteTrendSeries,
+  listRecentPurchases,
+  listRecentWaste,
+} from "@/server/queries/analytics";
 import { listMenuItems } from "@/server/queries/menu";
+import { getSalesByMenuItem, getSalesSummary } from "@/server/queries/sales";
 import { getSetupProgress } from "@/server/queries/onboarding";
-import { getOrganizationUnits, requireTenant } from "@/server/tenant";
+import { getOrganizationUnits } from "@/server/tenant";
 
 export const metadata = { title: "Overview" };
 
-export default async function DashboardPage() {
-  const tenant = await requireTenant();
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<AnalyticsSearchParams> }) {
+  const params = await searchParams;
+  const { tenant, range, location, scope, fromInput, toInput } = await getAnalyticsContext(params);
 
   // Until the guided setup is finished, the checklist is the dashboard.
   const setup = await getSetupProgress(tenant.organizationId);
   if (!tenant.onboardingCompletedAt && !setup.allStepsComplete) redirect("/onboarding");
 
   const units = await getOrganizationUnits(tenant.organizationId);
-  const [inventory, wasteTrend, menuItems] = await Promise.all([
-    getInventory(tenant.organizationId, tenant.locationId),
-    getWasteTrend(tenant.organizationId, 7),
+
+  const [inventory, purchaseTotals, waste, wasteTrend, wasteByReason, recentPurchases, recentWaste, menuItems, priceChanges, salesSummary, topSellers] = await Promise.all([
+    getInventorySnapshot(scope),
+    getPurchaseTotals(scope, range),
+    getWasteSummary(scope, range),
+    getWasteTrendSeries(scope, range, iso => bucketLabel(iso, range.granularity)),
+    getWasteByReason(scope, range),
+    listRecentPurchases(scope, range, 5),
+    listRecentWaste(scope, range, 5),
     listMenuItems(tenant.organizationId, units, { status: "active" }),
+    getSupplierPriceChanges(tenant.organizationId, 5),
+    getSalesSummary(scope, range),
+    getSalesByMenuItem(scope, range, 5),
   ]);
 
-  const lowStock = lowStockRows(inventory);
-  const weeklyWaste = wasteTrend.reduce((total, point) => total + point.cost, 0);
   const costedItems = menuItems.filter(item => item.economics.isCosted);
-  const margin = averageMargin(costedItems.map(item => ({ sellingPriceMillis: item.sellingPriceMillis, totalCostMillis: item.economics.totalCostMillis })));
+  const economics = menuItems.map(item => ({
+    sellingPriceMillis: item.sellingPriceMillis,
+    totalCostMillis: item.economics.totalCostMillis,
+    isCosted: item.economics.isCosted,
+  }));
+  const foodCost = menuFoodCostPercent(economics);
+  const margin = averageMarginOrNull(economics);
+
+  const topMenuItems = [...costedItems].sort((a, b) => b.economics.grossMarginPercent - a.economics.grossMarginPercent).slice(0, 5);
+  const highFoodCost = costedItems.filter(item => item.economics.foodCostPercent > 35).sort((a, b) => b.economics.foodCostPercent - a.economics.foodCostPercent).slice(0, 5);
+  const risingPrices = priceChanges.filter(row => (row.changePercent ?? 0) > 0);
+  const periodHint = `${range.label} · ${location.name}`;
+
+  // What the attention band is actually reporting, so its heading can say how
+  // much there is to look at — and stay calm when the answer is nothing.
+  const attentionCount = inventory.outOfStock.length + inventory.lowStock.length;
 
   return (
     <>
-      <PageHeader eyebrow="Today" title="Operations overview" description="Know what changed, what is at risk, and where profit is leaking." />
+      <PageHeader
+        eyebrow="Today"
+        title="Operations overview"
+        description="Know what changed, what is at risk, and where profit is leaking. Every figure below is calculated from this workspace's own records."
+      />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Inventory value" value={formatMoney(inventoryValue(inventory), tenant.currency)} hint={`${inventory.length} active ingredients`} icon={Coins} />
-        <StatCard label="Weekly waste" value={formatMoney(weeklyWaste, tenant.currency)} hint="Last seven days" icon={AlertTriangle} />
-        <StatCard label="Low-stock items" value={String(lowStock.length)} hint="Below minimum level" icon={PackageSearch} />
-        <StatCard
+      <AnalyticsFilters
+        locations={location.options}
+        currentPreset={range.preset}
+        currentLocationId={location.id}
+        from={fromInput}
+        to={toInput}
+        className="mb-6"
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <KpiCard
+          label="Inventory value"
+          value={formatMoney(inventory.totalValueMillis, tenant.currency)}
+          hint={`${inventory.activeCount} active ingredients · ${location.name}`}
+          icon={Coins}
+        />
+        <KpiCard
+          label="Purchases"
+          value={formatMoney(purchaseTotals.current, tenant.currency)}
+          hint={purchaseTotals.changePercent === null ? periodHint : `vs previous period · ${purchaseTotals.invoiceCount} invoices`}
+          icon={ShoppingCart}
+          change={purchaseTotals.changePercent}
+        />
+        <KpiCard
+          label="Waste"
+          value={formatMoney(waste.cost.current, tenant.currency)}
+          hint={waste.cost.changePercent === null ? periodHint : `vs previous period · ${waste.events} entries`}
+          icon={Trash2}
+          change={waste.cost.changePercent}
+          invertChange
+          emphasis={waste.cost.current > 0 ? "warning" : "neutral"}
+        />
+        <KpiCard
+          label="Food cost"
+          value={foodCost === null ? "—" : formatPercent(foodCost)}
+          hint={foodCost === null ? "Needs a costed menu item" : "Share of menu price spent on ingredients"}
+          icon={Percent}
+          emphasis={foodCost === null ? "neutral" : foodCostTone(foodCost) === "danger" ? "danger" : foodCostTone(foodCost) === "warning" ? "warning" : "success"}
+        />
+        <KpiCard
           label="Average margin"
-          value={costedItems.length ? formatPercent(margin) : "—"}
-          hint={costedItems.length ? `Across ${costedItems.length} costed menu items` : "Link recipes to menu items"}
+          value={margin === null ? "—" : formatPercent(margin)}
+          hint={margin === null ? "Link a recipe to a menu item" : `Across ${costedItems.length} costed items`}
           icon={TrendingUp}
+          emphasis={margin === null ? "neutral" : "success"}
         />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.6fr_1fr]">
-        <Card>
-          <CardHeader>
-            <h2 className="text-lg font-black">Waste cost trend</h2>
-            <p className="text-sm text-[var(--muted)]">Daily estimated ingredient value lost</p>
-          </CardHeader>
-          <CardContent>
-            {weeklyWaste === 0 ? (
-              <EmptyState
-                icon={AlertTriangle}
-                title="No waste recorded this week"
-                description="Either a great week, or waste is not being logged yet. Recording it is what turns spoilage into a number you can act on."
-                action={{ label: "Record waste", href: "/dashboard/waste" }}
-                className="py-8"
-              />
-            ) : (
-              <WasteChart data={wasteTrend} currency={tenant.currency} />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <h2 className="text-lg font-black">Stock attention</h2>
-            <p className="text-sm text-[var(--muted)]">Items nearest to a stockout</p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {inventory.length === 0 ? (
-              <EmptyState icon={PackageSearch} title="No stock tracked yet" description="Receive a purchase invoice to start tracking balances." action={{ label: "Receive purchase", href: "/dashboard/purchases" }} className="py-6" />
-            ) : (
-              <>
-                {[...inventory]
-                  .sort((a, b) => (a.minimum > 0 ? a.stock / a.minimum : Infinity) - (b.minimum > 0 ? b.stock / b.minimum : Infinity))
-                  .slice(0, 6)
-                  .map(item => (
+      {/* ---------------------------------------------------- operational insights */}
+      <Section
+        title="Needs attention"
+        description={attentionCount > 0 ? `${attentionCount} item${attentionCount === 1 ? "" : "s"} worth a look before anything else` : "Nothing is broken right now"}
+        tone={attentionCount > 0 ? "alert" : "default"}
+      >
+        <div className="grid gap-6 xl:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <h3 className="font-black">Low stock</h3>
+              <p className="text-sm text-[var(--muted)]">At or below the minimum you set</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {inventory.outOfStock.length === 0 && inventory.lowStock.length === 0 ? (
+                <EmptyState
+                  icon={PackageSearch}
+                  title={inventory.activeCount === 0 ? "No ingredients yet" : "Everything is stocked"}
+                  description={
+                    inventory.activeCount === 0
+                      ? "Add your ingredients to start tracking stock levels and low-stock alerts."
+                      : "No ingredient is at or below its minimum level right now."
+                  }
+                  action={inventory.activeCount === 0 ? { label: "Add ingredients", href: "/dashboard/ingredients" } : undefined}
+                  className="py-6"
+                />
+              ) : (
+                <>
+                  {[...inventory.outOfStock, ...inventory.lowStock].slice(0, 6).map(item => (
                     <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border p-3">
                       <div className="min-w-0">
                         <b className="block truncate text-sm">{item.name}</b>
                         <p className="text-xs text-[var(--muted)]">
-                          {formatQuantity(item.stock, item.unit)} {item.minimum > 0 && `/ min ${formatQuantity(item.minimum, item.unit)}`}
+                          Current: {formatQuantity(item.stock, item.unit)}
+                          {item.minimum > 0 && ` · Minimum: ${formatQuantity(item.minimum, item.unit)}`}
                         </p>
                       </div>
-                      <Badge tone={item.stock <= 0 ? "danger" : item.stock < item.minimum ? "warning" : "success"}>
-                        {item.stock <= 0 ? "Out" : item.stock < item.minimum ? "Order" : "OK"}
-                      </Badge>
+                      <Badge tone={item.stock <= 0 ? "danger" : "warning"}>{item.stock <= 0 ? "Out" : "Low"}</Badge>
                     </div>
                   ))}
-                <Link href="/dashboard/inventory">
-                  <Button variant="secondary" className="w-full">
-                    View full inventory <ArrowRight size={16} />
-                  </Button>
-                </Link>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                  <Link href="/dashboard/inventory">
+                    <Button variant="secondary" className="w-full">
+                      View full inventory <ArrowRight size={16} />
+                    </Button>
+                  </Link>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <h3 className="font-black">Recent purchases</h3>
+              <p className="text-sm text-[var(--muted)]">{periodHint}</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {recentPurchases.length === 0 ? (
+                <EmptyState
+                  icon={ReceiptText}
+                  title="No purchases in this period"
+                  description="Record a supplier invoice to put stock on hand and start building your cost history."
+                  action={{ label: "Receive purchase", href: "/dashboard/purchases?view=new" }}
+                  className="py-6"
+                />
+              ) : (
+                <>
+                  {recentPurchases.map(purchase => (
+                    <Link key={purchase.id} href={`/dashboard/purchases/${purchase.id}`} className="flex items-center justify-between gap-3 rounded-xl border p-3 transition hover:bg-neutral-50">
+                      <div className="min-w-0">
+                        <b className="block truncate text-sm">{purchase.supplierName ?? "No supplier"}</b>
+                        <p className="text-xs text-[var(--muted)]">
+                          {purchase.invoiceNumber ? `${purchase.invoiceNumber} · ` : ""}
+                          {purchase.itemCount} line{purchase.itemCount === 1 ? "" : "s"} · {purchase.receivedAt.toLocaleDateString()}
+                        </p>
+                      </div>
+                      <b className="shrink-0 text-sm tabular-nums">{formatMoney(purchase.totalMillis, tenant.currency)}</b>
+                    </Link>
+                  ))}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <h3 className="font-black">Recent waste</h3>
+              <p className="text-sm text-[var(--muted)]">{periodHint}</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {recentWaste.length === 0 ? (
+                <EmptyState
+                  icon={Trash2}
+                  title="No waste data yet"
+                  description="Record your first waste entry to start tracking waste costs."
+                  action={{ label: "Record waste", href: "/dashboard/waste" }}
+                  className="py-6"
+                />
+              ) : (
+                recentWaste.map(entry => (
+                  <div key={entry.id} className="flex items-center justify-between gap-3 rounded-xl border p-3">
+                    <div className="min-w-0">
+                      <b className="block truncate text-sm">{entry.ingredientName}</b>
+                      <p className="text-xs text-[var(--muted)]">
+                        {wasteReasonLabel(entry.reason)} · {formatQuantity(entry.quantity, entry.unit)} · {entry.occurredAt.toLocaleDateString()}
+                      </p>
+                    </div>
+                    <b className="shrink-0 text-sm tabular-nums text-red-700">{formatMoney(entry.costMillis, tenant.currency)}</b>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </Section>
+
+      {/* ---------------------------------------------------------------- analytics */}
+      <Section
+        title="Analytics"
+        description="Where the money sits, where it is going and what it is doing to your margin"
+      >
+        <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
+          <Card>
+            <CardHeader>
+              <h3 className="font-black">Waste cost trend</h3>
+              <p className="text-sm text-[var(--muted)]">
+                {waste.events > 0
+                  ? `${formatMoney(waste.cost.current, tenant.currency)} lost · ${waste.events} entries · ${range.granularity === "day" ? "daily" : range.granularity === "week" ? "weekly" : "monthly"}`
+                  : periodHint}
+              </p>
+            </CardHeader>
+            <CardContent>
+              {waste.events === 0 ? (
+                <EmptyState
+                  icon={AlertTriangle}
+                  title="No waste data yet"
+                  description="Record your first waste entry to start tracking waste costs."
+                  action={{ label: "Record waste", href: "/dashboard/waste" }}
+                  className="py-8"
+                />
+              ) : waste.cost.current === 0 ? (
+                <EmptyState
+                  icon={AlertTriangle}
+                  title="Waste recorded, but not costed"
+                  description={`${waste.events} entr${waste.events === 1 ? "y" : "ies"} in this period involve ingredients that have no unit cost yet, so there is nothing to plot. Receive a purchase invoice to price them.`}
+                  action={{ label: "Receive purchase", href: "/dashboard/purchases?view=new" }}
+                  className="py-8"
+                />
+              ) : (
+                <WasteChart data={wasteTrend} currency={tenant.currency} />
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <h3 className="font-black">Waste by reason</h3>
+              <p className="text-sm text-[var(--muted)]">Where the loss comes from</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {wasteByReason.length === 0 ? (
+                <EmptyState icon={Trash2} title="Nothing logged" description="Waste reasons appear once entries are recorded." className="py-6" />
+              ) : (
+                wasteByReason.map(row => (
+                  <div key={row.reason}>
+                    <div className="flex items-baseline justify-between gap-2 text-sm">
+                      <span className="font-semibold">{wasteReasonLabel(row.reason)}</span>
+                      <span className="tabular-nums">{formatMoney(row.cost, tenant.currency)}</span>
+                    </div>
+                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-neutral-100">
+                      <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.max(row.sharePercent, 2)}%` }} />
+                    </div>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      {formatPercent(row.sharePercent, 0)} of waste · {row.events} entr{row.events === 1 ? "y" : "ies"}
+                    </p>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="mt-6 grid gap-6 xl:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <h3 className="font-black">Top ingredient costs</h3>
+              <p className="text-sm text-[var(--muted)]">Where inventory money is tied up · {location.name}</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {inventory.topByValue.length === 0 ? (
+                <EmptyState
+                  icon={Coins}
+                  title="No stock value yet"
+                  description="Receive a purchase invoice to put stock on hand and value your inventory."
+                  action={{ label: "Receive purchase", href: "/dashboard/purchases?view=new" }}
+                  className="py-6"
+                />
+              ) : (
+                inventory.topByValue.slice(0, 6).map(item => {
+                  const share = inventory.totalValueMillis > 0 ? (item.valueMillis / inventory.totalValueMillis) * 100 : 0;
+                  return (
+                    <div key={item.id}>
+                      <div className="flex items-baseline justify-between gap-2 text-sm">
+                        <span className="truncate font-semibold">{item.name}</span>
+                        <span className="shrink-0 tabular-nums">{formatMoney(item.valueMillis, tenant.currency)}</span>
+                      </div>
+                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-neutral-100">
+                        <div className="h-full rounded-full bg-green-700" style={{ width: `${Math.max(share, 2)}%` }} />
+                      </div>
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        {formatQuantity(item.stock, item.unit)} @ {formatMoney(item.unitCostMillis, tenant.currency)}/{item.unit}
+                      </p>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <h3 className="font-black">Ingredients getting expensive</h3>
+              <p className="text-sm text-[var(--muted)]">Latest price paid vs the time before</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {risingPrices.length === 0 ? (
+                <EmptyState
+                  icon={ReceiptText}
+                  title="No price increases detected"
+                  description="Once the same ingredient is bought twice, price movements appear here."
+                  action={{ label: "View suppliers", href: "/dashboard/suppliers" }}
+                  className="py-6"
+                />
+              ) : (
+                risingPrices.map(row => (
+                  <div key={`${row.ingredientId}-${row.supplierId ?? "none"}`} className="flex items-center justify-between gap-3 rounded-xl border p-3">
+                    <div className="min-w-0">
+                      <b className="block truncate text-sm">{row.ingredientName}</b>
+                      <p className="text-xs text-[var(--muted)]">
+                        {row.supplierName ?? "No supplier"} · {formatMoney(row.previousPriceMillis ?? 0, tenant.currency)} →{" "}
+                        {formatMoney(row.currentPriceMillis, tenant.currency)}/{row.baseUnitCode}
+                      </p>
+                    </div>
+                    <Badge tone="danger">+{formatPercent(row.changePercent ?? 0)}</Badge>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </Section>
+
+      {/* -------------------------------------------------------------------- sales */}
+      <Section title="Sales" description="Actual revenue this period, and what is selling" action={{ label: "View all sales", href: "/dashboard/sales" }}>
+        {salesSummary.transactions.current === 0 ? (
+          <Card>
+            <EmptyState
+              icon={Receipt}
+              title="No sales in this period"
+              description="Record sales to measure real revenue against your menu costs, and to see how much stock your menu should be consuming."
+              action={{ label: "Record a sale", href: "/dashboard/sales" }}
+              className="py-8"
+            />
+          </Card>
+        ) : (
+          <div className="grid gap-6 xl:grid-cols-[1fr_1.4fr]">
+            <Card>
+              <CardHeader>
+                <h3 className="font-black">This period</h3>
+                <p className="text-sm text-[var(--muted)]">{periodHint}</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm text-[var(--muted)]">Revenue</span>
+                  <b className="text-2xl font-black tabular-nums text-green-800">{formatMoney(salesSummary.revenue.current, tenant.currency)}</b>
+                </div>
+                <div className="flex items-baseline justify-between gap-2 text-sm">
+                  <span className="text-[var(--muted)]">Transactions</span>
+                  <span className="tabular-nums">{salesSummary.transactions.current.toLocaleString()}</span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2 text-sm">
+                  <span className="text-[var(--muted)]">Units sold</span>
+                  <span className="tabular-nums">{salesSummary.unitsSold.current.toLocaleString()}</span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2 text-sm">
+                  <span className="text-[var(--muted)]">Average sale</span>
+                  <span className="tabular-nums">{formatMoney(salesSummary.averageTransactionMillis, tenant.currency)}</span>
+                </div>
+                {/* Purchases against revenue is a rough cost-of-goods signal.
+                    It is not food cost percentage — that needs consumption
+                    matched to the period, which the reports page does. */}
+                {purchaseTotals.current > 0 && salesSummary.revenue.current > 0 && (
+                  <p className="border-t pt-3 text-xs text-[var(--muted)]">
+                    Purchases were {formatPercent((purchaseTotals.current / salesSummary.revenue.current) * 100)} of revenue this period.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="overflow-hidden">
+              <CardHeader>
+                <h3 className="font-black">Best sellers</h3>
+                <p className="text-sm text-[var(--muted)]">By revenue, at the prices actually charged</p>
+              </CardHeader>
+              <Table>
+                <THead>
+                  <TR className="hover:bg-transparent">
+                    <TH>Item</TH>
+                    <TH className="text-right">Units</TH>
+                    <TH className="text-right">Revenue</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {topSellers.map(item => (
+                    <TR key={item.menuItemId}>
+                      <TD>
+                        <b className="text-sm">{item.menuItemName}</b>
+                      </TD>
+                      <TDNum>{item.quantity.toLocaleString()}</TDNum>
+                      <TDNum className="font-semibold">{formatMoney(item.revenueMillis, tenant.currency)}</TDNum>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            </Card>
+          </div>
+        )}
+      </Section>
+
+      {/* ------------------------------------------------------------ profitability */}
+      <Section title="Profitability" description="Every dish priced against the live cost of its ingredients" action={{ label: "Open reports", href: "/dashboard/reports?report=menu" }}>
+        {menuItems.length === 0 ? (
+          <Card>
+            <EmptyState
+              icon={UtensilsCrossed}
+              title="No menu items yet"
+              description="Create a menu item and connect it to a recipe to start measuring profitability."
+              action={{ label: "Build your menu", href: "/dashboard/menu" }}
+            />
+          </Card>
+        ) : costedItems.length === 0 ? (
+          <Card>
+            <EmptyState
+              icon={ChefHat}
+              title="Nothing costed yet"
+              description="Your menu items have no ingredients attached, so food cost and margin cannot be calculated. Add what goes into each dish to see its profit."
+              action={{ label: "Open menu", href: "/dashboard/menu" }}
+            />
+          </Card>
+        ) : (
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Card className="overflow-hidden">
+              <CardHeader>
+                <h3 className="font-black">Best margins</h3>
+                <p className="text-sm text-[var(--muted)]">Priced against live ingredient costs</p>
+              </CardHeader>
+              <Table>
+                <THead>
+                  <TR className="hover:bg-transparent">
+                    <TH>Item</TH>
+                    <TH className="text-right">Price</TH>
+                    <TH className="text-right">Cost</TH>
+                    <TH className="text-right">Profit</TH>
+                    <TH className="text-right">Margin</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {topMenuItems.map(item => (
+                    <TR key={item.id}>
+                      <TD>
+                        <b className="text-sm">{item.name}</b>
+                        {item.category && <span className="block text-xs text-[var(--muted)]">{item.category}</span>}
+                      </TD>
+                      <TDNum>{formatMoney(item.sellingPriceMillis, tenant.currency)}</TDNum>
+                      <TDNum>{formatMoney(item.economics.totalCostMillis, tenant.currency)}</TDNum>
+                      <TDNum className="font-semibold text-green-800">{formatMoney(item.economics.grossProfitMillis, tenant.currency)}</TDNum>
+                      <TDNum>
+                        <Badge tone="success">{formatPercent(item.economics.grossMarginPercent)}</Badge>
+                      </TDNum>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <h3 className="font-black">High food cost</h3>
+                <p className="text-sm text-[var(--muted)]">Above the 35% watch line</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {highFoodCost.length === 0 ? (
+                  <EmptyState
+                    icon={TrendingUp}
+                    title="Every item is within range"
+                    description="No costed menu item is above 35% food cost. Margins are healthy across the menu."
+                    className="py-6"
+                  />
+                ) : (
+                  highFoodCost.map(item => (
+                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-red-200/70 bg-red-50/40 p-3">
+                      <div className="min-w-0">
+                        <b className="block truncate text-sm">{item.name}</b>
+                        <p className="text-xs text-[var(--muted)]">
+                          {formatMoney(item.economics.totalCostMillis, tenant.currency)} cost on {formatMoney(item.sellingPriceMillis, tenant.currency)}
+                        </p>
+                      </div>
+                      <Badge tone={foodCostTone(item.economics.foodCostPercent)}>{formatPercent(item.economics.foodCostPercent)}</Badge>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </Section>
     </>
   );
 }

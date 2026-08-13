@@ -17,10 +17,17 @@ export function FilterBar({ searchPlaceholder = "Search…", filters = [], class
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
-  const [query, setQuery] = useState(searchParams.get("q") ?? "");
 
-  // Keep the input in sync when navigation changes the URL from elsewhere.
-  useEffect(() => setQuery(searchParams.get("q") ?? ""), [searchParams]);
+  const urlQuery = searchParams.get("q") ?? "";
+  const [query, setQuery] = useState(urlQuery);
+  // Adjust state during render rather than in an effect: when the URL changes
+  // from elsewhere (Clear, back button), reset the box without a second pass
+  // that could overwrite what the user is mid-way through typing.
+  const [lastUrlQuery, setLastUrlQuery] = useState(urlQuery);
+  if (urlQuery !== lastUrlQuery) {
+    setLastUrlQuery(urlQuery);
+    setQuery(urlQuery);
+  }
 
   function apply(next: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());

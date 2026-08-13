@@ -5,14 +5,13 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { SupplierPriceHistory } from "@/components/suppliers/supplier-price-history";
 import { SupplierProductTable } from "@/components/suppliers/supplier-product-table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Coins, Package, Receipt } from "lucide-react";
 import { formatMoney } from "@/lib/money";
 import { listIngredientOptions } from "@/server/queries/ingredients";
 import { getSupplier, getSupplierPriceHistory, listSupplierProducts, listSuppliers } from "@/server/queries/suppliers";
-import { can, getOrganizationUnits, requireTenant } from "@/server/tenant";
+import { hasPermission, getOrganizationUnits, requireTenant } from "@/server/tenant";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const tenant = await requireTenant();
@@ -100,7 +99,7 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
           ingredients={ingredients}
           units={units}
           currency={tenant.currency}
-          canManage={can(tenant.role, "manage_catalog")}
+          canManage={hasPermission(tenant.role, "manage_suppliers")}
         />
         <SupplierPriceHistory points={history} currency={tenant.currency} />
       </div>

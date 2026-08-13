@@ -9,7 +9,7 @@ import { formatMoney } from "@/lib/money";
 import { formatQuantity } from "@/lib/units";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { getPurchase } from "@/server/queries/purchases";
-import { requireTenant } from "@/server/tenant";
+import { canAccessAllLocations, requireTenant } from "@/server/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +17,7 @@ async function PurchaseDetail({ id }: { id: string }) {
   const tenant = await requireTenant();
   const purchase = await getPurchase(tenant.organizationId, id);
   if (!purchase) notFound();
+  if (!canAccessAllLocations(tenant.role) && tenant.locationId !== purchase.locationId) notFound();
   return { purchase, currency: tenant.currency };
 }
 

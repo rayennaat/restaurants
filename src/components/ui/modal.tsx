@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,31 @@ import { cn } from "@/lib/utils";
  * element so focus trapping, Escape handling and the top layer come from the
  * platform instead of another dependency.
  */
+
+/**
+ * Whether React has finished hydrating.
+ *
+ * A portal has no server equivalent: its markup is appended to `document.body`,
+ * which does not exist during SSR. Rendering it on the very first client pass
+ * would mean the server sent nothing where the client expects a `<dialog>`, and
+ * React reports a hydration mismatch and throws the tree away.
+ *
+ * `useSyncExternalStore` expresses exactly that — the server snapshot is
+ * `false` and is also what the hydration pass renders, then the client snapshot
+ * takes over on the commit after. A `useState` + `useEffect` pair would produce
+ * the same result by deliberately triggering the cascading re-render that
+ * `react-hooks/set-state-in-effect` exists to prevent; this asks the question
+ * directly instead. The store never changes, so the subscribe callback has
+ * nothing to register.
+ */
+const subscribeToNothing = () => () => {};
+const useHasHydrated = () =>
+  useSyncExternalStore(
+    subscribeToNothing,
+    () => true,
+    () => false,
+  );
+
 export function Modal({
   open,
   onClose,
@@ -26,18 +51,14 @@ export function Modal({
   size?: "md" | "lg" | "xl";
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  const mounted = useRef(false);
-
-  useEffect(() => {
-    mounted.current = true;
-  }, []);
+  const mounted = useHasHydrated();
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
     if (open && !dialog.open) dialog.showModal();
     if (!open && dialog.open) dialog.close();
-  }, [open]);
+  }, [open, mounted]);
 
   useEffect(() => {
     if (!open) return;
@@ -47,7 +68,8 @@ export function Modal({
     };
   }, [open]);
 
-  if (typeof document === "undefined") return null;
+  // Server render and first client render agree: both produce nothing.
+  if (!mounted) return null;
 
   return createPortal(
     <dialog

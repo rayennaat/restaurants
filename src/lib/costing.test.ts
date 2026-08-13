@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { calculateMargin, calculateMenuEconomics, calculateRecipeCost, collectRecipeDependencies, convertToBaseUnit, costRecipeGraph, type RecipeGraphNode } from "./costing";
+import {
+  calculateMargin,
+  calculateMenuEconomics,
+  calculateRecipeCost,
+  collectRecipeDependencies,
+  convertToBaseUnit,
+  costMenuItems,
+  costRecipeGraph,
+  type MenuGraphNode,
+  type RecipeGraphNode,
+} from "./costing";
 import type { UnitRow } from "./units";
 
 const units: UnitRow[] = [
@@ -98,6 +108,63 @@ describe("collectRecipeDependencies", () => {
   it("walks transitively and survives an existing cycle", () => {
     const edges = new Map([["a", ["b"]], ["b", ["c"]], ["c", ["a"]]]);
     expect([...collectRecipeDependencies("a", edges)].sort()).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("costMenuItems", () => {
+  function dish(overrides: Partial<MenuGraphNode> & Pick<MenuGraphNode, "id" | "name">): MenuGraphNode {
+    return { yieldQuantity: 1, lines: [], ...overrides };
+  }
+
+  it("costs a dish from its own raw lines", () => {
+    const costing = costMenuItems([dish({ id: "m1", name: "Salad", lines: [ingredientLine("i1", "Tomato", 200, "g", 3000)] })], [], units).get("m1")!;
+    expect(costing.totalCostMillis).toBe(600); // 0.2 kg * 3000
+    expect(costing.costPerServingMillis).toBe(600);
+  });
+
+  it("divides a batch across its portions", () => {
+    const costing = costMenuItems(
+      [dish({ id: "m1", name: "Soup", yieldQuantity: 4, lines: [ingredientLine("i1", "Tomato", 500, "g", 3000), ingredientLine("i2", "Cream", 200, "ml", 8000, "L")] })],
+      [],
+      units,
+    ).get("m1")!;
+    expect(costing.totalCostMillis).toBe(3100);
+    expect(costing.costPerServingMillis).toBe(775);
+  });
+
+  it("pulls a preparation's per-yield-unit cost into the dish", () => {
+    // 2 kg of mayo costing 3600 millimes -> 1800 per kg.
+    const preparations: RecipeGraphNode[] = [node({ id: "prep", name: "Mayonnaise", yieldQuantity: 2, yieldUnitCode: "kg", lines: [ingredientLine("oil", "Oil", 2, "kg", 1800)] })];
+    const costing = costMenuItems(
+      [
+        dish({
+          id: "burger",
+          name: "Burger",
+          lines: [ingredientLine("bun", "Bun", 1, "kg", 750), { kind: "recipe", componentRecipeId: "prep", componentName: "Mayonnaise", quantity: 15, unitCode: "g" }],
+        }),
+      ],
+      preparations,
+      units,
+    ).get("burger")!;
+
+    // 750 for the bun + 15 g of a 1800/kg preparation = 27.
+    expect(costing.totalCostMillis).toBe(777);
+    expect(costing.depth).toBe(1);
+  });
+
+  it("keys results by the plain menu item id even when one matches a recipe id", () => {
+    const shared = "same-id";
+    const preparations: RecipeGraphNode[] = [node({ id: shared, name: "Stock", yieldQuantity: 1, yieldUnitCode: "L", lines: [ingredientLine("bone", "Bones", 1, "kg", 4000)] })];
+    const costing = costMenuItems([dish({ id: shared, name: "Dish", lines: [ingredientLine("i1", "Tomato", 1, "kg", 1000)] })], preparations, units).get(shared)!;
+
+    // The dish's own line, not the identically-identified preparation's.
+    expect(costing.totalCostMillis).toBe(1000);
+  });
+
+  it("treats a dish with no lines as uncosted rather than free", () => {
+    const costing = costMenuItems([dish({ id: "m1", name: "Empty" })], [], units).get("m1")!;
+    expect(costing.totalCostMillis).toBe(0);
+    expect(costing.hasUncostedIngredient).toBe(true);
   });
 });
 

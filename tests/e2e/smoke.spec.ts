@@ -1,2 +1,14 @@
 import { test, expect } from "@playwright/test";
-test("demo dashboard and inventory load", async ({ page }) => { await page.goto("/dashboard"); await expect(page.getByRole("heading", { name: "Operations overview" })).toBeVisible(); await page.goto("/dashboard/inventory"); await expect(page.getByRole("heading", { name: "Inventory" })).toBeVisible(); await expect(page.getByText("Chicken breast")).toBeVisible(); });
+
+test("login surface is available before authentication", async ({ page }) => {
+  await page.goto("/auth/login");
+  await expect(page.getByLabel("Email")).toBeVisible();
+  await expect(page.getByLabel("Password")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+});
+
+test("demo health check does not require a database", async ({ request }) => {
+  const response = await request.get("/api/health");
+  expect(response.ok()).toBe(true);
+  await expect(response.json()).resolves.toMatchObject({ ok: true, mode: "demo" });
+});

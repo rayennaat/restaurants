@@ -8,7 +8,8 @@ import { toMinorUnits } from "@/lib/money";
 import { supplierInput, supplierProductInput } from "@/lib/validation";
 import { actionError, actionOk, toActionError, type ActionResult } from "@/server/action-result";
 import { recordAudit } from "@/server/audit";
-import { assertCan, requireTenant } from "@/server/tenant";
+import { requirePermission, requireTenant } from "@/server/tenant";
+import { ActionError } from "@/lib/action-error";
 
 function revalidateSupplierViews(supplierId?: string) {
   revalidatePath("/dashboard/suppliers");
@@ -19,7 +20,7 @@ function revalidateSupplierViews(supplierId?: string) {
 export async function saveSupplier(input: unknown): Promise<ActionResult<{ id: string }>> {
   try {
     const tenant = await requireTenant();
-    assertCan(tenant.role, "manage_catalog");
+    requirePermission(tenant.role, "manage_suppliers");
     const values = supplierInput.parse(input);
     const db = getDb();
 
@@ -34,33 +35,39 @@ export async function saveSupplier(input: unknown): Promise<ActionResult<{ id: s
       updatedAt: new Date(),
     };
 
-    let id = values.id;
-    if (id) {
-      const [updated] = await db
-        .update(suppliers)
-        .set(record)
-        .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, tenant.organizationId)))
-        .returning({ id: suppliers.id });
-      if (!updated) return actionError("Supplier not found.");
-    } else {
-      const [created] = await db
-        .insert(suppliers)
-        .values({ ...record, organizationId: tenant.organizationId })
-        .returning({ id: suppliers.id });
-      id = created.id;
-    }
+    const id = await db.transaction(async tx => {
+      let savedId = values.id;
+      if (savedId) {
+        const [updated] = await tx
+          .update(suppliers)
+          .set(record)
+          .where(and(eq(suppliers.id, savedId), eq(suppliers.organizationId, tenant.organizationId)))
+          .returning({ id: suppliers.id });
+        if (!updated) throw new ActionError("Supplier not found.");
+      } else {
+        const [created] = await tx
+          .insert(suppliers)
+          .values({ ...record, organizationId: tenant.organizationId })
+          .returning({ id: suppliers.id });
+        savedId = created.id;
+      }
 
-    await recordAudit({
-      organizationId: tenant.organizationId,
-      userId: tenant.userId,
-      action: values.id ? "update" : "create",
-      entityType: "supplier",
-      entityId: id,
-      metadata: { name: values.name },
+      await recordAudit(
+        {
+          organizationId: tenant.organizationId,
+          userId: tenant.userId,
+          action: values.id ? "update" : "create",
+          entityType: "supplier",
+          entityId: savedId,
+          metadata: { name: values.name },
+        },
+        tx,
+      );
+      return savedId;
     });
 
     revalidateSupplierViews(id);
-    return actionOk({ id: id! });
+    return actionOk({ id });
   } catch (error) {
     return toActionError(error);
   }
@@ -69,16 +76,24 @@ export async function saveSupplier(input: unknown): Promise<ActionResult<{ id: s
 export async function setSupplierArchived(id: string, archived: boolean): Promise<ActionResult> {
   try {
     const tenant = await requireTenant();
-    assertCan(tenant.role, "manage_catalog");
+    requirePermission(tenant.role, "manage_suppliers");
 
-    const [updated] = await getDb()
-      .update(suppliers)
-      .set({ isActive: !archived, updatedAt: new Date() })
-      .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, tenant.organizationId)))
-      .returning({ id: suppliers.id, name: suppliers.name });
+    const updated = await getDb().transaction(async tx => {
+      const [row] = await tx
+        .update(suppliers)
+        .set({ isActive: !archived, updatedAt: new Date() })
+        .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, tenant.organizationId)))
+        .returning({ id: suppliers.id, name: suppliers.name });
+      if (!row) return null;
+
+      await recordAudit(
+        { organizationId: tenant.organizationId, userId: tenant.userId, action: archived ? "archive" : "restore", entityType: "supplier", entityId: id, metadata: { name: row.name } },
+        tx,
+      );
+      return row;
+    });
     if (!updated) return actionError("Supplier not found.");
 
-    await recordAudit({ organizationId: tenant.organizationId, userId: tenant.userId, action: archived ? "archive" : "restore", entityType: "supplier", entityId: id, metadata: { name: updated.name } });
     revalidateSupplierViews(id);
     return actionOk();
   } catch (error) {
@@ -89,14 +104,37 @@ export async function setSupplierArchived(id: string, archived: boolean): Promis
 export async function deleteSupplier(id: string): Promise<ActionResult> {
   try {
     const tenant = await requireTenant();
-    assertCan(tenant.role, "manage_catalog");
+    requirePermission(tenant.role, "manage_suppliers");
     const db = getDb();
 
-    const [purchase] = await db.select({ id: purchases.id }).from(purchases).where(eq(purchases.supplierId, id)).limit(1);
+    // Ownership before the invoice check, so the answer cannot report whether
+    // another workspace's supplier has purchase history.
+    const [owned] = await db
+      .select({ id: suppliers.id })
+      .from(suppliers)
+      .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, tenant.organizationId)))
+      .limit(1);
+    if (!owned) return actionError("Supplier not found.");
+
+    const [purchase] = await db
+      .select({ id: purchases.id })
+      .from(purchases)
+      .where(and(eq(purchases.supplierId, id), eq(purchases.organizationId, tenant.organizationId)))
+      .limit(1);
     if (purchase) return actionError("This supplier has invoices on record. Archive it instead so your purchase history stays intact.");
 
-    await db.delete(suppliers).where(and(eq(suppliers.id, id), eq(suppliers.organizationId, tenant.organizationId)));
-    await recordAudit({ organizationId: tenant.organizationId, userId: tenant.userId, action: "delete", entityType: "supplier", entityId: id });
+    await db.transaction(async tx => {
+      const [deleted] = await tx
+        .delete(suppliers)
+        .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, tenant.organizationId)))
+        .returning({ name: suppliers.name });
+      if (!deleted) throw new ActionError("Supplier not found.");
+
+      await recordAudit(
+        { organizationId: tenant.organizationId, userId: tenant.userId, action: "delete", entityType: "supplier", entityId: id, metadata: { name: deleted.name } },
+        tx,
+      );
+    });
 
     revalidateSupplierViews();
     return actionOk();
@@ -115,7 +153,7 @@ export async function deleteSupplier(id: string): Promise<ActionResult> {
 export async function saveSupplierProduct(input: unknown): Promise<ActionResult<{ id: string }>> {
   try {
     const tenant = await requireTenant();
-    assertCan(tenant.role, "manage_catalog");
+    requirePermission(tenant.role, "manage_suppliers");
     const values = supplierProductInput.parse(input);
     const db = getDb();
 
@@ -142,37 +180,43 @@ export async function saveSupplierProduct(input: unknown): Promise<ActionResult<
       updatedAt: new Date(),
     };
 
-    let id = values.id;
-    if (id) {
-      const [updated] = await db
-        .update(supplierProducts)
-        .set(record)
-        .where(and(eq(supplierProducts.id, id), eq(supplierProducts.organizationId, tenant.organizationId)))
-        .returning({ id: supplierProducts.id });
-      if (!updated) return actionError("Supplier product not found.");
-    } else {
-      // The (supplier, ingredient) unique index makes this an idempotent upsert,
-      // so re-adding an existing product refreshes it instead of failing.
-      const [created] = await db
-        .insert(supplierProducts)
-        .values({ ...record, organizationId: tenant.organizationId, supplierId: values.supplierId, ingredientId: values.ingredientId })
-        .onConflictDoUpdate({ target: [supplierProducts.supplierId, supplierProducts.ingredientId], set: record })
-        .returning({ id: supplierProducts.id });
-      id = created.id;
-    }
+    const id = await db.transaction(async tx => {
+      let savedId = values.id;
+      if (savedId) {
+        const [updated] = await tx
+          .update(supplierProducts)
+          .set(record)
+          .where(and(eq(supplierProducts.id, savedId), eq(supplierProducts.organizationId, tenant.organizationId)))
+          .returning({ id: supplierProducts.id });
+        if (!updated) throw new ActionError("Supplier product not found.");
+      } else {
+        // The (supplier, ingredient) unique index makes this an idempotent upsert,
+        // so re-adding an existing product refreshes it instead of failing.
+        const [created] = await tx
+          .insert(supplierProducts)
+          .values({ ...record, organizationId: tenant.organizationId, supplierId: values.supplierId, ingredientId: values.ingredientId })
+          .onConflictDoUpdate({ target: [supplierProducts.supplierId, supplierProducts.ingredientId], set: record })
+          .returning({ id: supplierProducts.id });
+        savedId = created.id;
+      }
 
-    await recordAudit({
-      organizationId: tenant.organizationId,
-      userId: tenant.userId,
-      action: values.id ? "update" : "create",
-      entityType: "supplier_product",
-      entityId: id,
-      metadata: { supplierId: values.supplierId, ingredientId: values.ingredientId, priceMillis: record.lastPriceMillis },
+      await recordAudit(
+        {
+          organizationId: tenant.organizationId,
+          userId: tenant.userId,
+          action: values.id ? "update" : "create",
+          entityType: "supplier_product",
+          entityId: savedId,
+          metadata: { supplierId: values.supplierId, ingredientId: values.ingredientId, priceMillis: record.lastPriceMillis },
+        },
+        tx,
+      );
+      return savedId;
     });
 
     revalidateSupplierViews(values.supplierId);
     revalidatePath("/dashboard/ingredients");
-    return actionOk({ id: id! });
+    return actionOk({ id });
   } catch (error) {
     return toActionError(error);
   }
@@ -181,15 +225,23 @@ export async function saveSupplierProduct(input: unknown): Promise<ActionResult<
 export async function deleteSupplierProduct(id: string): Promise<ActionResult> {
   try {
     const tenant = await requireTenant();
-    assertCan(tenant.role, "manage_catalog");
+    requirePermission(tenant.role, "manage_suppliers");
 
-    const [deleted] = await getDb()
-      .delete(supplierProducts)
-      .where(and(eq(supplierProducts.id, id), eq(supplierProducts.organizationId, tenant.organizationId)))
-      .returning({ supplierId: supplierProducts.supplierId });
+    const deleted = await getDb().transaction(async tx => {
+      const [row] = await tx
+        .delete(supplierProducts)
+        .where(and(eq(supplierProducts.id, id), eq(supplierProducts.organizationId, tenant.organizationId)))
+        .returning({ supplierId: supplierProducts.supplierId });
+      if (!row) return null;
+
+      await recordAudit(
+        { organizationId: tenant.organizationId, userId: tenant.userId, action: "delete", entityType: "supplier_product", entityId: id, metadata: { supplierId: row.supplierId } },
+        tx,
+      );
+      return row;
+    });
     if (!deleted) return actionError("Supplier product not found.");
 
-    await recordAudit({ organizationId: tenant.organizationId, userId: tenant.userId, action: "delete", entityType: "supplier_product", entityId: id });
     revalidateSupplierViews(deleted.supplierId);
     return actionOk();
   } catch (error) {

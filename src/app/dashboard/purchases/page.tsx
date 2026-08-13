@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { PackagePlus } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { SectionNav } from "@/components/dashboard/section-nav";
 import { PurchaseInvoiceBuilder } from "@/components/forms/purchase-invoice-builder";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Table, TBody, TD, TDNum, TH, THead, TR } from "@/components/ui/table";
@@ -12,10 +13,8 @@ import { formatDate } from "@/lib/utils";
 import { listIngredientOptions } from "@/server/queries/ingredients";
 import { listPurchases } from "@/server/queries/purchases";
 import { listSupplierOptions, listSupplierProductLookup } from "@/server/queries/suppliers";
-import { getOrganizationUnits, requireTenantLocation, requireTenant } from "@/server/tenant";
-import { and, eq } from "drizzle-orm";
-import { locations } from "@/db/schema";
-import { getDb } from "@/db/client";
+import { resolveMemberLocation } from "@/server/queries/locations";
+import { getOrganizationUnits, hasPermission, requireTenant } from "@/server/tenant";
 
 export const metadata = { title: "Purchases" };
 
@@ -25,17 +24,14 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
   const tenant = await requireTenant();
 
   const params = await searchParams;
-  const view = params.view === "list" ? "list" : "new";
+  const canPurchase = hasPermission(tenant.role, "manage_purchasing");
+  const view = params.view === "list" || !canPurchase ? "list" : "new";
   const defaultSupplierId = typeof params.supplierId === "string" ? params.supplierId : undefined;
-
-  const db = getDb();
-  const locs = await db
-    .select({ id: locations.id, name: locations.name })
-    .from(locations)
-    .where(and(eq(locations.organizationId, tenant.organizationId), eq(locations.isActive, true)));
+  const location = await resolveMemberLocation(tenant, undefined);
+  const locs = location.options.filter(option => option.isActive).map(option => ({ id: option.id, name: option.name }));
 
   const [purchases, ingredients, suppliers, products, units] = await Promise.all([
-    listPurchases(tenant.organizationId, { locationId: tenant.locationId, limit: 30 }),
+    listPurchases(tenant.organizationId, { locationId: location.id, limit: 30 }),
     listIngredientOptions(tenant.organizationId),
     listSupplierOptions(tenant.organizationId),
     listSupplierProductLookup(tenant.organizationId),
@@ -45,9 +41,9 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <PageHeader
-        eyebrow="Receiving"
+        eyebrow="Purchases"
         title="Purchases"
-        description="Record real supplier invoices. Each line updates stock, ingredient cost and supplier pricing in one atomic transaction."
+        description="Record the invoices you receive from suppliers. Each line adds stock, updates that ingredient's cost, and remembers the price your supplier charged."
         action={
           <div className="flex gap-2">
             <Link href="?view=list">
@@ -55,14 +51,18 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
                 Purchase history
               </Button>
             </Link>
-            <Link href="?view=new">
-              <Button variant={view === "new" ? "secondary" : "ghost"} size="sm">
-                New invoice
-              </Button>
-            </Link>
+            {canPurchase && (
+              <Link href="?view=new">
+                <Button variant={view === "new" ? "secondary" : "ghost"} size="sm">
+                  New invoice
+                </Button>
+              </Link>
+            )}
           </div>
         }
       />
+
+      <SectionNav />
 
       {view === "new" ? (
         locs.length === 0 ? (

@@ -3,6 +3,8 @@ import { getTenantContext } from "@/server/tenant";
 import { WorkspaceCreation } from "@/components/onboarding/workspace-creation";
 import { SetupChecklist } from "@/components/onboarding/setup-checklist";
 import { getSetupProgress } from "@/server/queries/onboarding";
+import { listPendingInvitationsForEmail } from "@/server/queries/team";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Get Started" };
 
@@ -15,9 +17,21 @@ export const metadata = { title: "Get Started" };
 export default async function OnboardingPage() {
   const state = await getTenantContext();
 
-  // No organization yet — show the workspace creation form.
   if (!state || "needsOnboarding" in state) {
-    return <WorkspaceCreation />;
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    // Someone invited this address but they landed here instead of following
+    // the link. Creating a workspace now would strand them: `getTenantContext`
+    // picks the oldest membership, so they would keep landing in their own
+    // empty organization even after accepting. We cannot rebuild their link —
+    // only the token hash is stored — so we tell them to use the one they were
+    // sent, and leave the choice with them.
+    const invitations = user?.email ? await listPendingInvitationsForEmail(user.email) : [];
+
+    return <WorkspaceCreation pendingInvitations={invitations.map(invitation => invitation.organizationName)} />;
   }
 
   // Organization exists. If setup is finished, go straight to the dashboard.

@@ -1,7 +1,6 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { ingredients, locations, purchaseItems, purchases, suppliers } from "@/db/schema";
-import type { InferSelectModel } from "drizzle-orm";
 
 export type PurchaseListRow = {
   id: string;
@@ -32,7 +31,9 @@ export async function listPurchases(organizationId: string, options: { locationI
       locationName: locations.name,
     })
     .from(purchases)
-    .leftJoin(suppliers, eq(suppliers.id, purchases.supplierId))
+    // Tenant-scoped join, as in `getPurchase`: the name is only borrowed from a
+    // supplier this organization owns.
+    .leftJoin(suppliers, and(eq(suppliers.id, purchases.supplierId), eq(suppliers.organizationId, organizationId)))
     .innerJoin(locations, eq(locations.id, purchases.locationId))
     .where(and(...conditions))
     .orderBy(desc(purchases.receivedAt))
@@ -86,7 +87,10 @@ export async function getPurchase(organizationId: string, id: string): Promise<P
       createdBy: purchases.createdBy,
     })
     .from(purchases)
-    .leftJoin(suppliers, eq(suppliers.id, purchases.supplierId))
+    // The supplier join is tenant-scoped as well as keyed: receiving verifies
+    // the supplier belongs to the organization, and this makes the read hold
+    // even against a row written before that check existed.
+    .leftJoin(suppliers, and(eq(suppliers.id, purchases.supplierId), eq(suppliers.organizationId, organizationId)))
     .innerJoin(locations, eq(locations.id, purchases.locationId))
     .where(and(eq(purchases.id, id), eq(purchases.organizationId, organizationId)))
     .limit(1);

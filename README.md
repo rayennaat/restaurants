@@ -142,7 +142,7 @@ npm run dev
 curl http://localhost:3000/api/health
 ```
 
-A working connection returns JSON with `"mode":"database"` and the PostgreSQL database name.
+A working connection returns JSON with `"ok":true,"mode":"database"`. The endpoint deliberately does not expose the PostgreSQL database name or driver errors.
 
 ## 5. Apply Row Level Security
 
@@ -195,15 +195,17 @@ npm run db:seed
 ## 8. Development commands
 
 ```bash
-npm run dev          # Development server
-npm run typecheck    # Strict TypeScript check
-npm run lint         # ESLint
-npm run test         # Costing unit tests
-npm run test:e2e     # Playwright browser tests
-npm run build        # Production build
-npm run db:generate  # Generate migrations from schema
-npm run db:migrate   # Apply migrations
-npm run db:studio    # Visual database browser
+npm run dev              # Development server
+npm run typecheck        # Strict TypeScript check
+npm run lint             # ESLint
+npm run test             # Unit, integrity-structure and security-regression tests
+npm run test:e2e         # Playwright desktop/mobile smoke tests
+npm run build            # Production build
+npm run db:generate      # Generate migrations
+npm run db:migrate       # Apply migrations
+npm run db:studio        # Visual database browser
+npm run verify:security  # Rollback-only RLS/role/location/constraint probes on a real DB
+npm run verify:integrity # Rollback-only inventory/sales/transfer flow on a real DB
 ```
 
 Install Playwright's browser once:
@@ -230,18 +232,17 @@ Do not add `DATABASE_MIGRATION_URL` to Vercel unless you deliberately run migrat
 
 ## 10. Important production work still required
 
-This is a serious MVP foundation, not a finished commercial ERP. Before charging restaurants, add:
+The application now has server-side role/location authorization, tenant consistency constraints, append-only audit logging, and real-database security/integrity probes. Before charging restaurants, complete the infrastructure and operating controls that a repository cannot provide:
 
-- Role-specific authorization per action, not only organization membership
-- Audit log writes for sensitive changes
-- Recipe editing and versioning UI
-- Multi-line supplier invoices
-- Stock counts and variance approval
-- Transfers between locations
-- CSV/POS imports
-- Automatic tests against a staging Supabase project
-- Backups, support process, privacy policy and security review
-- Tunisia payment flow and Stripe Billing for the U.S. version
+- Use a dedicated least-privileged PostgreSQL runtime role instead of a database owner/superuser connection; grant only the tables and operations the server needs.
+- Run `verify:security` and `verify:integrity` automatically against a disposable staging Supabase project after every migration.
+- Enable and restore-test managed backups / point-in-time recovery; document recovery-time and recovery-point objectives.
+- Configure production Supabase Auth: verified email required, exact site/redirect allowlists, SMTP delivery, abuse/rate limits, and MFA policy for privileged operators.
+- Configure monitoring and alerting for authentication failures, elevated error rates, database saturation, failed background work, and audit-log write failures.
+- Define audit/data retention, support access, incident response, privacy policy, data-processing terms, and tenant offboarding/export/deletion procedures.
+- Add a nonce-based Content Security Policy after testing every Next.js, Sentry and service-worker script path.
+- Perform authenticated browser tests with real owner, manager, inventory, kitchen and accountant accounts across two tenants and multiple locations.
+- Complete payment, tax and billing compliance for each commercial market.
 
 ## Architecture decision
 

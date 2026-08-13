@@ -1,8 +1,9 @@
 import { PageHeader } from "@/components/dashboard/page-header";
+import { SectionNav } from "@/components/dashboard/section-nav";
 import { SupplierComparison } from "@/components/suppliers/supplier-comparison";
 import { SupplierDirectory } from "@/components/suppliers/supplier-directory";
 import { getSupplierComparison, listSuppliers } from "@/server/queries/suppliers";
-import { can, requireTenant } from "@/server/tenant";
+import { hasPermission, requireTenant } from "@/server/tenant";
 
 export const metadata = { title: "Suppliers" };
 
@@ -22,11 +23,13 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <PageHeader
-        eyebrow="Purchasing"
+        eyebrow="Purchases"
         title="Suppliers"
         description="Who you buy from, what they sell you and what you last paid. Prices refresh themselves every time you record an invoice."
       />
-      <SupplierDirectory rows={rows} currency={tenant.currency} canManage={can(tenant.role, "manage_catalog")} isEmptyDirectory={totalCount === 0} />
+
+      <SectionNav />
+      <SupplierDirectory rows={rows} currency={tenant.currency} canManage={hasPermission(tenant.role, "manage_suppliers")} isEmptyDirectory={totalCount === 0} />
       {comparison.length > 0 && (
         <div className="mt-8">
           <SupplierComparison rows={comparison} currency={tenant.currency} />
