@@ -5,10 +5,17 @@ out
 .env
 .env.local
 .env.*.local
+.env.staging
 coverage
 playwright-report
 test-results
 .DS_Store
+
+# Database backups may contain customer data and secrets.
+backups/
+*.dump
+*.backup
+*.sql.gz
 # Serwist generated workers
 public/sw.js
 public/sw.js.map

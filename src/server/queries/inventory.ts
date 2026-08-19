@@ -1,58 +1,18 @@
-import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { ingredients, locations, stockMovements, wasteEntries } from "@/db/schema";
+import { getInventoryValuation, type InventoryValueRow } from "@/server/queries/analytics";
 
-export type InventoryRow = {
-  id: string;
-  name: string;
-  sku: string | null;
-  category: string | null;
-  unit: string;
-  stock: number;
-  minimum: number;
-  unitCostMillis: number;
-  valueMillis: number;
-  lastMovementAt: Date | null;
-};
+export type InventoryRow = InventoryValueRow;
 
 /**
  * Current balance per ingredient, summed from the append-only movement ledger.
  * Passing `locationId` scopes to one kitchen; passing null totals the whole org.
+ * The Overview valuation query is the single source of truth for this shape and
+ * its non-negative value calculation.
  */
 export async function getInventory(organizationId: string, locationId: string | null): Promise<InventoryRow[]> {
-  const db = getDb();
-  const movementFilter = locationId
-    ? and(eq(stockMovements.ingredientId, ingredients.id), eq(stockMovements.locationId, locationId))
-    : and(eq(stockMovements.ingredientId, ingredients.id), eq(stockMovements.organizationId, organizationId));
-
-  const rows = await db
-    .select({
-      id: ingredients.id,
-      name: ingredients.name,
-      sku: ingredients.sku,
-      category: ingredients.category,
-      unit: ingredients.baseUnitCode,
-      minimum: ingredients.minimumStock,
-      unitCostMillis: ingredients.latestUnitCostMillis,
-      stock: sql<string>`coalesce(sum(${stockMovements.quantity}), 0)`,
-      lastMovementAt: sql<Date | null>`max(${stockMovements.occurredAt})`,
-    })
-    .from(ingredients)
-    .leftJoin(stockMovements, movementFilter)
-    .where(and(eq(ingredients.organizationId, organizationId), eq(ingredients.isActive, true)))
-    .groupBy(ingredients.id)
-    .orderBy(asc(ingredients.name));
-
-  return rows.map(row => {
-    const stock = Number(row.stock);
-    return {
-      ...row,
-      stock,
-      minimum: Number(row.minimum),
-      valueMillis: Math.round(stock * row.unitCostMillis),
-      lastMovementAt: row.lastMovementAt ? new Date(row.lastMovementAt) : null,
-    };
-  });
+  return getInventoryValuation({ organizationId, locationId });
 }
 
 /** Total value of stock on hand, used by the dashboard KPI and valuation report. */
@@ -61,7 +21,7 @@ export function inventoryValue(rows: InventoryRow[]) {
 }
 
 export function lowStockRows(rows: InventoryRow[]) {
-  return rows.filter(row => row.stock < row.minimum);
+  return rows.filter(row => row.stock > 0 && row.minimum > 0 && row.stock <= row.minimum);
 }
 
 export type MovementRow = {

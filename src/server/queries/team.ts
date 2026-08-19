@@ -1,15 +1,15 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { authUsers, displayNameFrom } from "@/db/auth-schema";
 import { locations, organizationInvitations, organizationMembers, organizations } from "@/db/schema";
 import { normalizeRole, type MemberRole } from "@/server/tenant";
 
 /**
  * Team roster and pending invitations.
  *
- * Identity is joined from `auth.users` rather than copied onto the membership
- * row, so a changed email shows up here immediately. That table is Supabase's,
- * not ours: it is read, never written — see `db/auth-schema`.
+ * The runtime database role intentionally cannot read Supabase's private auth
+ * schema. Membership rows therefore expose stable, nullable identity fallbacks;
+ * authorization continues to use the member user id from the session and the
+ * organization-scoped membership row.
  *
  * Every query is filtered by `organizationId` from the server-side tenant
  * context. Nothing here accepts an organization from the caller's request.
@@ -36,30 +36,23 @@ export async function listTeamMembers(organizationId: string, viewerUserId: stri
       defaultLocationId: organizationMembers.defaultLocationId,
       defaultLocationName: locations.name,
       joinedAt: organizationMembers.createdAt,
-      email: authUsers.email,
-      metadata: authUsers.rawUserMetaData,
-      lastSignInAt: authUsers.lastSignInAt,
     })
     .from(organizationMembers)
     .leftJoin(locations, eq(locations.id, organizationMembers.defaultLocationId))
-    .leftJoin(authUsers, eq(authUsers.id, organizationMembers.userId))
     .where(eq(organizationMembers.organizationId, organizationId))
     .orderBy(asc(organizationMembers.createdAt));
 
-  return rows.map(row => {
-    const email = row.email ?? "";
-    return {
-      userId: row.userId,
-      email,
-      displayName: displayNameFrom(row.metadata, email || "Unknown user"),
-      role: normalizeRole(row.role),
-      defaultLocationId: row.defaultLocationId,
-      defaultLocationName: row.defaultLocationName,
-      joinedAt: row.joinedAt,
-      lastSignInAt: row.lastSignInAt,
-      isSelf: row.userId === viewerUserId,
-    };
-  });
+  return rows.map(row => ({
+    userId: row.userId,
+    email: "",
+    displayName: row.userId === viewerUserId ? "You" : "Unknown user",
+    role: normalizeRole(row.role),
+    defaultLocationId: row.defaultLocationId,
+    defaultLocationName: row.defaultLocationName,
+    joinedAt: row.joinedAt,
+    lastSignInAt: null,
+    isSelf: row.userId === viewerUserId,
+  }));
 }
 
 /** How many owners the organization has — the last one may not be demoted or removed. */
@@ -92,12 +85,9 @@ export async function listPendingInvitations(organizationId: string): Promise<Pe
       locationName: locations.name,
       expiresAt: organizationInvitations.expiresAt,
       createdAt: organizationInvitations.createdAt,
-      inviterEmail: authUsers.email,
-      inviterMetadata: authUsers.rawUserMetaData,
     })
     .from(organizationInvitations)
     .leftJoin(locations, eq(locations.id, organizationInvitations.defaultLocationId))
-    .leftJoin(authUsers, eq(authUsers.id, organizationInvitations.invitedBy))
     .where(and(eq(organizationInvitations.organizationId, organizationId), eq(organizationInvitations.status, "pending")))
     .orderBy(desc(organizationInvitations.createdAt));
 
@@ -107,7 +97,7 @@ export async function listPendingInvitations(organizationId: string): Promise<Pe
     email: row.email,
     role: normalizeRole(row.role),
     locationName: row.locationName,
-    invitedByName: row.inviterEmail ? displayNameFrom(row.inviterMetadata, row.inviterEmail) : null,
+    invitedByName: null,
     expiresAt: row.expiresAt,
     createdAt: row.createdAt,
     isExpired: row.expiresAt.getTime() <= now,

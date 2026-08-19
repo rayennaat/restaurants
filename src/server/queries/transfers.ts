@@ -1,6 +1,5 @@
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { authUsers, displayNameFrom } from "@/db/auth-schema";
 import { ingredients, locations, stockMovements, stockTransferItems, stockTransfers } from "@/db/schema";
 import type { TransferStatus } from "@/lib/transfers";
 
@@ -73,11 +72,8 @@ export async function listTransfers(
       createdAt: stockTransfers.createdAt,
       sentAt: stockTransfers.sentAt,
       receivedAt: stockTransfers.receivedAt,
-      creatorEmail: authUsers.email,
-      creatorMetadata: authUsers.rawUserMetaData,
     })
     .from(stockTransfers)
-    .leftJoin(authUsers, eq(authUsers.id, stockTransfers.createdBy))
     .where(and(...conditions))
     .orderBy(desc(stockTransfers.createdAt))
     .limit(options.limit ?? 100);
@@ -119,7 +115,7 @@ export async function listTransfers(
       sourceLocationName: locationName.get(row.sourceLocationId) ?? "Unknown",
       destinationLocationId: row.destinationLocationId,
       destinationLocationName: locationName.get(row.destinationLocationId) ?? "Unknown",
-      createdByName: row.creatorEmail ? displayNameFrom(row.creatorMetadata, row.creatorEmail) : null,
+      createdByName: null,
       createdAt: row.createdAt,
       sentAt: row.sentAt,
       receivedAt: row.receivedAt,
@@ -188,9 +184,6 @@ export async function getTransfer(organizationId: string, transferId: string, tx
       receivedAt: stockTransfers.receivedAt,
       cancelledAt: stockTransfers.cancelledAt,
       cancelReason: stockTransfers.cancelReason,
-      createdBy: stockTransfers.createdBy,
-      sentBy: stockTransfers.sentBy,
-      receivedBy: stockTransfers.receivedBy,
     })
     .from(stockTransfers)
     .where(and(eq(stockTransfers.id, transferId), eq(stockTransfers.organizationId, organizationId)))
@@ -218,19 +211,6 @@ export async function getTransfer(organizationId: string, transferId: string, tx
   ]);
 
   const locationName = new Map(locationRows.map(entry => [entry.id, entry.name]));
-
-  const userIds = [row.createdBy, row.sentBy, row.receivedBy].filter((id): id is string => Boolean(id));
-  const users = userIds.length
-    ? await db
-        .select({ id: authUsers.id, email: authUsers.email, metadata: authUsers.rawUserMetaData })
-        .from(authUsers)
-        .where(inArray(authUsers.id, userIds))
-    : [];
-  const nameOf = (id: string | null) => {
-    if (!id) return null;
-    const user = users.find(entry => entry.id === id);
-    return user?.email ? displayNameFrom(user.metadata, user.email) : null;
-  };
 
   const available = await availableAtLocation(
     organizationId,
@@ -264,9 +244,9 @@ export async function getTransfer(organizationId: string, transferId: string, tx
     sourceLocationName: locationName.get(row.sourceLocationId) ?? "Unknown",
     destinationLocationId: row.destinationLocationId,
     destinationLocationName: locationName.get(row.destinationLocationId) ?? "Unknown",
-    createdByName: nameOf(row.createdBy),
-    sentByName: nameOf(row.sentBy),
-    receivedByName: nameOf(row.receivedBy),
+    createdByName: null,
+    sentByName: null,
+    receivedByName: null,
     createdAt: row.createdAt,
     sentAt: row.sentAt,
     receivedAt: row.receivedAt,

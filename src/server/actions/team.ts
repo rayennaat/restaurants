@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { authUsers } from "@/db/auth-schema";
 import { locations, organizationInvitations, organizationMembers } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -62,15 +61,31 @@ export async function inviteEmployee(input: unknown): Promise<ActionResult<{ tok
 
     const db = getDb();
 
-    // Someone who is already a member cannot be invited again. Matched on the
-    // live auth email rather than a stored copy.
+    // The runtime role cannot read Supabase's private auth schema. Detect the
+    // current member directly from their authenticated email, and detect prior
+    // invitees through application-owned accepted invitation history. A final
+    // user-id membership check also runs when any invitation is redeemed.
     const existing = await db
       .select({ userId: organizationMembers.userId })
       .from(organizationMembers)
-      .innerJoin(authUsers, eq(authUsers.id, organizationMembers.userId))
-      .where(and(eq(organizationMembers.organizationId, tenant.organizationId), eq(authUsers.email, values.email)))
+      .innerJoin(
+        organizationInvitations,
+        and(
+          eq(organizationInvitations.organizationId, organizationMembers.organizationId),
+          eq(organizationInvitations.acceptedBy, organizationMembers.userId),
+        ),
+      )
+      .where(
+        and(
+          eq(organizationMembers.organizationId, tenant.organizationId),
+          eq(organizationInvitations.email, values.email),
+          eq(organizationInvitations.status, "accepted"),
+        ),
+      )
       .limit(1);
-    if (existing.length) return actionError("That person is already on your team.", { email: "Already a member." });
+    if (tenant.email?.toLowerCase() === values.email || existing.length) {
+      return actionError("That person is already on your team.", { email: "Already a member." });
+    }
 
     const token = createInvitationToken();
     const tokenHash = hashInvitationToken(token);
@@ -159,6 +174,18 @@ export async function acceptInvitation(token: string): Promise<ActionResult<{ or
 
     const rejection = checkInvitationRedeemable(invitation ?? null, user.email ?? null);
     if (rejection) return actionError(INVITATION_REJECTION_MESSAGES[rejection]);
+
+    const [existingMember] = await db
+      .select({ userId: organizationMembers.userId })
+      .from(organizationMembers)
+      .where(
+        and(
+          eq(organizationMembers.organizationId, invitation.organizationId),
+          eq(organizationMembers.userId, user.id),
+        ),
+      )
+      .limit(1);
+    if (existingMember) return actionError("You already belong to this workspace.");
 
     // Redeemability established that the stored role is one an invitation may
     // grant, so this narrowing cannot widen what the link is worth.

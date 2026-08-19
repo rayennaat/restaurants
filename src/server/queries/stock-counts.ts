@@ -1,6 +1,5 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { authUsers, displayNameFrom } from "@/db/auth-schema";
 import { ingredients, locations, stockCountItems, stockCounts } from "@/db/schema";
 import {
   calculateItemVariance,
@@ -55,12 +54,9 @@ export async function listStockCounts(
       createdAt: stockCounts.createdAt,
       submittedAt: stockCounts.submittedAt,
       approvedAt: stockCounts.approvedAt,
-      creatorEmail: authUsers.email,
-      creatorMetadata: authUsers.rawUserMetaData,
     })
     .from(stockCounts)
     .innerJoin(locations, eq(locations.id, stockCounts.locationId))
-    .leftJoin(authUsers, eq(authUsers.id, stockCounts.createdBy))
     .where(and(...conditions))
     .orderBy(desc(stockCounts.createdAt))
     .limit(options.limit ?? 50);
@@ -102,7 +98,7 @@ export async function listStockCounts(
       status: row.status as StockCountStatus,
       locationId: row.locationId,
       locationName: row.locationName,
-      createdByName: row.creatorEmail ? displayNameFrom(row.creatorMetadata, row.creatorEmail) : null,
+      createdByName: null,
       createdAt: row.createdAt,
       submittedAt: row.submittedAt,
       approvedAt: row.approvedAt,
@@ -152,9 +148,6 @@ export async function getStockCount(organizationId: string, id: string): Promise
       submittedAt: stockCounts.submittedAt,
       approvedAt: stockCounts.approvedAt,
       rejectionReason: stockCounts.rejectionReason,
-      createdBy: stockCounts.createdBy,
-      submittedBy: stockCounts.submittedBy,
-      approvedBy: stockCounts.approvedBy,
     })
     .from(stockCounts)
     .innerJoin(locations, eq(locations.id, stockCounts.locationId))
@@ -163,8 +156,7 @@ export async function getStockCount(organizationId: string, id: string): Promise
 
   if (!row) return null;
 
-  const [lines, people] = await Promise.all([
-    db
+  const lines = await db
       .select({
         id: stockCountItems.id,
         ingredientId: stockCountItems.ingredientId,
@@ -180,18 +172,7 @@ export async function getStockCount(organizationId: string, id: string): Promise
       .from(stockCountItems)
       .innerJoin(ingredients, eq(ingredients.id, stockCountItems.ingredientId))
       .where(eq(stockCountItems.stockCountId, id))
-      .orderBy(asc(stockCountItems.sortOrder), asc(ingredients.name)),
-    db
-      .select({ id: authUsers.id, email: authUsers.email, metadata: authUsers.rawUserMetaData })
-      .from(authUsers)
-      .where(inArray(authUsers.id, [row.createdBy, row.submittedBy, row.approvedBy].filter((value): value is string => Boolean(value)))),
-  ]);
-
-  const nameOf = (userId: string | null) => {
-    if (!userId) return null;
-    const person = people.find(entry => entry.id === userId);
-    return person?.email ? displayNameFrom(person.metadata, person.email) : null;
-  };
+      .orderBy(asc(stockCountItems.sortOrder), asc(ingredients.name));
 
   const items = lines.map(line => ({
     ...calculateItemVariance({
@@ -214,9 +195,9 @@ export async function getStockCount(organizationId: string, id: string): Promise
     status: row.status as StockCountStatus,
     locationId: row.locationId,
     locationName: row.locationName,
-    createdByName: nameOf(row.createdBy),
-    submittedByName: nameOf(row.submittedBy),
-    approvedByName: nameOf(row.approvedBy),
+    createdByName: null,
+    submittedByName: null,
+    approvedByName: null,
     createdAt: row.createdAt,
     submittedAt: row.submittedAt,
     approvedAt: row.approvedAt,

@@ -16,9 +16,10 @@ import { ActionError } from "@/lib/action-error";
 const TIMEZONE_BY_LOCALE: Record<string, string> = { "fr-TN": "Africa/Tunis", "ar-TN": "Africa/Tunis", "fr-FR": "Europe/Paris", "en-US": "America/New_York" };
 
 /**
- * Creates the organization, its first location, the owner membership and the
- * standard unit table in a single transaction. This is the only write in the
- * app that runs before a tenant context exists.
+ * Creates the organization, all submitted locations, the owner membership and
+ * the standard unit table in a single transaction. The first location becomes
+ * the owner's default. This is the only write in the app that runs before a
+ * tenant context exists.
  */
 export async function createWorkspace(_prev: unknown, formData: FormData): Promise<ActionResult<{ organizationId: string }>> {
   try {
@@ -48,12 +49,35 @@ export async function createWorkspace(_prev: unknown, formData: FormData): Promi
         })
         .returning();
 
-      const [location] = await tx.insert(locations).values({ organizationId: organization.id, name: input.locationName }).returning();
-      await tx.insert(organizationMembers).values({ organizationId: organization.id, userId: user.id, role: "owner", defaultLocationId: location.id });
+      const [defaultLocation] = await tx
+        .insert(locations)
+        .values({ organizationId: organization.id, name: input.locations[0] })
+        .returning({ id: locations.id });
+
+      const additionalLocations = input.locations.slice(1);
+      if (additionalLocations.length) {
+        await tx.insert(locations).values(
+          additionalLocations.map(name => ({ organizationId: organization.id, name })),
+        );
+      }
+
+      await tx.insert(organizationMembers).values({
+        organizationId: organization.id,
+        userId: user.id,
+        role: "owner",
+        defaultLocationId: defaultLocation.id,
+      });
       await tx.insert(units).values(DEFAULT_UNITS.map(unit => ({ ...unit, organizationId: organization.id })));
 
       await recordAudit(
-        { organizationId: organization.id, userId: user.id, action: "create", entityType: "organization", entityId: organization.id, metadata: { name: organization.name } },
+        {
+          organizationId: organization.id,
+          userId: user.id,
+          action: "create",
+          entityType: "organization",
+          entityId: organization.id,
+          metadata: { name: organization.name, locationCount: input.locations.length },
+        },
         tx,
       );
       return organization.id;

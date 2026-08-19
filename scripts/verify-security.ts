@@ -1,7 +1,3 @@
-import { config } from "dotenv";
-config({ path: ".env.local" });
-config();
-
 import postgres from "postgres";
 
 /**
@@ -35,7 +31,8 @@ import postgres from "postgres";
  * confirm the value did not move. A probe passes only when the attempt was
  * refused outright or provably changed nothing.
  *
- * Run with: npm run verify:security
+ * Run locally with: npm run verify:security
+ * Run against staging with: npm run verify:security:staging
  */
 
 const CONNECTION = process.env.DATABASE_MIGRATION_URL || process.env.DATABASE_URL;

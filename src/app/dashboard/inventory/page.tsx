@@ -3,22 +3,30 @@ import { Boxes, Coins, PackagePlus, PackageSearch, TrendingDown } from "lucide-r
 import { PageHeader } from "@/components/dashboard/page-header";
 import { SectionNav } from "@/components/dashboard/section-nav";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { InventoryLocationFilter } from "@/components/inventory/inventory-location-filter";
+import { InventoryTable } from "@/components/inventory/inventory-table";
+import { MovementLedger } from "@/components/inventory/movement-ledger";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { InventoryTable } from "@/components/inventory/inventory-table";
-import { MovementLedger } from "@/components/inventory/movement-ledger";
 import { formatMoney } from "@/lib/money";
 import { getInventory, inventoryValue, listStockMovements, lowStockRows } from "@/server/queries/inventory";
+import { resolveMemberLocation } from "@/server/queries/locations";
 import { requireTenant } from "@/server/tenant";
 
 export const metadata = { title: "Inventory" };
 
-export default async function InventoryPage() {
+export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ location?: string | string[] }> }) {
   const tenant = await requireTenant();
+  const params = await searchParams;
+  const requestedLocation = Array.isArray(params.location) ? params.location[0] : params.location;
+  const location = await resolveMemberLocation(tenant, requestedLocation);
+  // `null` means all locations for organization-wide roles. An unassigned
+  // site-bound member instead gets a sentinel so this page fails closed.
+  const inventoryLocationId = location.options.length === 0 ? "__no_assigned_location__" : location.id;
   const [inventory, movements] = await Promise.all([
-    getInventory(tenant.organizationId, tenant.locationId),
-    listStockMovements(tenant.organizationId, { locationId: tenant.locationId, limit: 25 }),
+    getInventory(tenant.organizationId, inventoryLocationId),
+    listStockMovements(tenant.organizationId, { locationId: inventoryLocationId, limit: 25 }),
   ]);
 
   const lowStock = lowStockRows(inventory);
@@ -41,6 +49,13 @@ export default async function InventoryPage() {
 
       <SectionNav />
 
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-[var(--muted)]">
+          {inventory.length} active ingredient{inventory.length === 1 ? "" : "s"} · {location.name}
+        </p>
+        <InventoryLocationFilter locations={location.options} currentLocationId={location.id} />
+      </div>
+
       {inventory.length === 0 ? (
         <Card>
           <EmptyState
@@ -54,9 +69,9 @@ export default async function InventoryPage() {
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-3">
-            <StatCard label="Stock on hand" value={formatMoney(inventoryValue(inventory), tenant.currency)} hint={`${inventory.length} active ingredients`} icon={Coins} />
-            <StatCard label="Below minimum" value={String(lowStock.length)} hint="Reorder these first" icon={PackageSearch} />
-            <StatCard label="Out of stock" value={String(outOfStock.length)} hint="Zero or negative balance" icon={TrendingDown} />
+            <StatCard label="Stock on hand" value={formatMoney(inventoryValue(inventory), tenant.currency)} hint={`${inventory.length} active ingredient${inventory.length === 1 ? "" : "s"} · ${location.name}`} icon={Coins} />
+            <StatCard label="Below minimum" value={String(lowStock.length)} hint={`Reorder these first · ${location.name}`} icon={PackageSearch} />
+            <StatCard label="Out of stock" value={String(outOfStock.length)} hint={`Zero or negative balance · ${location.name}`} icon={TrendingDown} />
           </div>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]">

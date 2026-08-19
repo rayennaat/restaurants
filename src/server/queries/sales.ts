@@ -232,41 +232,44 @@ export type LocationSales = { locationId: string; locationName: string; revenueM
  * so this ignores `scope.locationId`.
  */
 export async function getSalesByLocation(scope: Pick<Scope, "organizationId">, range: DateRange): Promise<LocationSales[]> {
-  const rows = await getDb()
-    .select({
-      locationId: sales.locationId,
-      locationName: locations.name,
-      revenue: sql<string>`coalesce(sum(${sales.totalMillis}), 0)`,
-      transactions: count(),
-      /**
-       * Summed through a subquery rather than a join. Joining `sale_lines` here
-       * would repeat each sale's row once per line and multiply its total —
-       * the same correlated-subquery trap that produced wrong figures earlier
-       * in this codebase.
-       */
-      units: sql<string>`coalesce((
-        select sum(sl.quantity)
-        from sale_lines sl
-        join sales s2 on s2.id = sl.sale_id
-        where s2.location_id = ${sales.locationId}
-          and s2.organization_id = ${scope.organizationId}
-          and s2.status = 'recorded'
-          and s2.sold_at >= ${range.from}
-          and s2.sold_at < ${range.to}
-      ), 0)`,
-    })
-    .from(sales)
-    .innerJoin(locations, eq(locations.id, sales.locationId))
-    .where(and(eq(sales.organizationId, scope.organizationId), RECORDED, gte(sales.soldAt, range.from), lt(sales.soldAt, range.to)))
-    .groupBy(sales.locationId, locations.name)
-    .orderBy(desc(sql`sum(${sales.totalMillis})`));
+  const db = getDb();
+  const conditions = [eq(sales.organizationId, scope.organizationId), RECORDED, gte(sales.soldAt, range.from), lt(sales.soldAt, range.to)];
 
-  return rows.map(row => ({
+  // Keep sale totals and line quantities in separate aggregates. Joining both
+  // tables directly would multiply a sale total once per line, while correlating
+  // the line aggregate to the grouped sales query triggers PostgreSQL grouping
+  // rules on the outer tenant column.
+  const [revenueRows, unitRows] = await Promise.all([
+    db
+      .select({
+        locationId: sales.locationId,
+        locationName: locations.name,
+        revenue: sql<string>`coalesce(sum(${sales.totalMillis}), 0)`,
+        transactions: count(),
+      })
+      .from(sales)
+      .innerJoin(locations, eq(locations.id, sales.locationId))
+      .where(and(...conditions))
+      .groupBy(sales.locationId, locations.name)
+      .orderBy(desc(sql`sum(${sales.totalMillis})`)),
+    db
+      .select({
+        locationId: sales.locationId,
+        units: sql<string>`coalesce(sum(${saleLines.quantity}), 0)`,
+      })
+      .from(sales)
+      .innerJoin(saleLines, eq(saleLines.saleId, sales.id))
+      .where(and(...conditions))
+      .groupBy(sales.locationId),
+  ]);
+
+  const unitsByLocation = new Map(unitRows.map(row => [row.locationId, toNumber(row.units)]));
+  return revenueRows.map(row => ({
     locationId: row.locationId,
     locationName: row.locationName,
     revenueMillis: toNumber(row.revenue),
     transactions: toNumber(row.transactions),
-    unitsSold: toNumber(row.units),
+    unitsSold: unitsByLocation.get(row.locationId) ?? 0,
   }));
 }
 

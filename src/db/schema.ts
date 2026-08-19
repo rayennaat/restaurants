@@ -82,10 +82,10 @@ export const locations = pgTable("locations", {
 /**
  * A person's membership of one organization, and the role that authorizes them.
  *
- * Identity (name, email) is not duplicated here: `userId` references
- * Supabase's `auth.users`, which lives in the same database and is joined at
- * read time — see `db/auth-schema`. That keeps a changed email correct
- * everywhere instead of leaving a stale copy on this row.
+ * Identity is represented by the Supabase Auth user id only. The least-privileged
+ * runtime database role cannot read the private auth schema, so server queries
+ * must not join membership rows to `auth.users`. Profile data that needs to be
+ * shown in the application belongs in a separate application-owned table.
  */
 export const organizationMembers = pgTable("organization_members", {
   organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),

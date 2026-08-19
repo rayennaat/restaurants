@@ -45,6 +45,10 @@ const RLS = read("supabase/rls.sql");
 const SCHEMA = read("src/db/schema.ts");
 const VALIDATION = read("src/lib/validation.ts");
 const LOCATIONS = read("src/server/queries/locations.ts");
+const STOCK_COUNTS = read("src/server/queries/stock-counts.ts");
+const TEAM_QUERIES = read("src/server/queries/team.ts");
+const TRANSFER_QUERIES = read("src/server/queries/transfers.ts");
+const TEAM_ACTIONS = read("src/server/actions/team.ts");
 const AUDIT_MIGRATION = read("drizzle/0009_audit_log_immutability.sql");
 const TENANT_INTEGRITY_MIGRATION = read("drizzle/0010_tenant_integrity.sql");
 const JOURNAL = read("drizzle/meta/_journal.json");
@@ -219,6 +223,39 @@ describe("cross-tenant write: the organization is never taken from the request",
   });
 });
 
+describe("operational reads work with the least-privileged runtime role", () => {
+  const runtimeModules = {
+    "stock-count queries": STOCK_COUNTS,
+    "team queries": TEAM_QUERIES,
+    "transfer queries": TRANSFER_QUERIES,
+    "team actions": TEAM_ACTIONS,
+  };
+
+  for (const [name, source] of Object.entries(runtimeModules)) {
+    it(`${name} does not depend on Supabase's private auth schema`, () => {
+      expect(code(source)).not.toMatch(/authUsers|auth\.users|@\/db\/auth-schema/);
+    });
+  }
+
+  it("uses nullable actor labels when private identity metadata is unavailable", () => {
+    for (const source of [STOCK_COUNTS, TRANSFER_QUERIES]) {
+      expect(source).toContain("createdByName: null");
+    }
+    expect(STOCK_COUNTS).toContain("submittedByName: null");
+    expect(STOCK_COUNTS).toContain("approvedByName: null");
+    expect(TRANSFER_QUERIES).toContain("sentByName: null");
+    expect(TRANSFER_QUERIES).toContain("receivedByName: null");
+    expect(TEAM_QUERIES).toContain('displayName: row.userId === viewerUserId ? "You" : "Unknown user"');
+    expect(TEAM_QUERIES).toContain("invitedByName: null");
+  });
+
+  it("rejects duplicate invitation redemption by authenticated user id", () => {
+    const accept = allActions.find(action => action.key === "team.ts:acceptInvitation")!;
+    expect(accept.body).toMatch(/eq\(organizationMembers\.userId, user\.id\)/);
+    expect(accept.body).toContain("if (existingMember)");
+  });
+});
+
 describe("cross-tenant read: a foreign id reveals nothing, not even that it exists", () => {
   /**
    * Each of these actions takes an id and looks up what *references* it before
@@ -367,6 +404,30 @@ describe("unauthorized location: a payload cannot reach another site", () => {
     expect(page).toMatch(/resolveMemberLocation\(tenant, undefined\)/);
     expect(page).toMatch(/location\.options\.filter/);
     expect(page).toMatch(/listPurchases\(tenant\.organizationId, \{ locationId: location\.id/);
+  });
+
+  it("inventory uses the validated location scope for all reads", () => {
+    const page = read("src/app/dashboard/inventory/page.tsx");
+    expect(page).toMatch(/resolveMemberLocation\(tenant, requestedLocation\)/);
+    expect(page).toMatch(/getInventory\(tenant\.organizationId, inventoryLocationId\)/);
+    expect(page).toMatch(/listStockMovements\(tenant\.organizationId, \{ locationId: inventoryLocationId/);
+    expect(page).toMatch(/inventoryLocationId = location\.options\.length === 0/);
+    expect(page).toMatch(/inventoryValue\(inventory\)/);
+  });
+
+  it("inventory location controls are hidden when only one authorized location exists", () => {
+    const filter = read("src/components/inventory/inventory-location-filter.tsx");
+    expect(filter).toMatch(/locations\.length <= 1/);
+    expect(filter).toMatch(/All locations/);
+    expect(filter).toMatch(/currentLocationId \?\? "all"/);
+  });
+
+  it("inventory and overview share the canonical valuation query", () => {
+    const inventory = read("src/server/queries/inventory.ts");
+    const analytics = read("src/server/queries/analytics.ts");
+    expect(inventory).toMatch(/return getInventoryValuation\(\{ organizationId, locationId \}\)/);
+    expect(analytics).toMatch(/Math\.max\(stock, 0\) \* row\.unitCostMillis/);
+    expect(inventory).not.toMatch(/Math\.round\(stock \* row\.unitCostMillis\)/);
   });
 
   it("the waste endpoint writes the session's location, never the body's", () => {

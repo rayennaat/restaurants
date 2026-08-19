@@ -37,9 +37,33 @@ export const unitCode = z.string().trim().min(1, "Select a unit").max(24);
 
 // ---------------------------------------------------------------- organization
 
+const onboardingLocations = z
+  .string()
+  .transform((value, context) => {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (!Array.isArray(parsed)) throw new Error("not an array");
+      return parsed;
+    } catch {
+      context.addIssue({ code: "custom", message: "Add at least one valid location." });
+      return z.NEVER;
+    }
+  })
+  .pipe(z.array(shortText(120)).min(1, "Add at least one location.").max(50, "You can add up to 50 locations.")
+    .superRefine((locations, context) => {
+      const seen = new Set<string>();
+      for (const location of locations) {
+        const key = location.toLocaleLowerCase();
+        if (seen.has(key)) {
+          context.addIssue({ code: "custom", message: "Each location must be unique." });
+        }
+        seen.add(key);
+      }
+    }));
+
 export const onboardingInput = z.object({
   organizationName: shortText(120),
-  locationName: shortText(120),
+  locations: onboardingLocations,
   currency: z.enum(SUPPORTED_CURRENCIES),
   locale: z.enum(["fr-TN", "ar-TN", "en-US", "fr-FR"]),
   timezone: optionalText(64),

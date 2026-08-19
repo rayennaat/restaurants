@@ -1,7 +1,3 @@
-import { config } from "dotenv";
-config({ path: ".env.local" });
-config();
-
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "../src/db/client";
 import {
@@ -47,7 +43,8 @@ import { expandMenuItemConsumption } from "../src/lib/consumption";
  * to run against a database with live data, which is precisely when you most
  * want to run it.
  *
- * Run with: npm run verify:integrity
+ * Run locally with: npm run verify:integrity
+ * Run against staging with: npm run verify:integrity:staging
  */
 
 type Check = { name: string; pass: boolean; detail: string };
