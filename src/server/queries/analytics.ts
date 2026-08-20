@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { ingredients, locations, purchaseItems, purchases, stockMovements, suppliers, wasteEntries } from "@/db/schema";
 import { bucketStarts, percentChange, type DateRange, type Granularity } from "@/lib/date-range";
+import { inventoryStockValueMillis } from "@/lib/inventory-valuation";
 
 /**
  * Aggregated analytics for the dashboard and reports.
@@ -287,7 +288,7 @@ export async function getInventoryValuation(scope: Scope): Promise<InventoryValu
       minimum: toNumber(row.minimum),
       // Negative stock is a data problem, not negative value — floor at zero so
       // one bad count cannot understate the whole valuation.
-      valueMillis: Math.round(Math.max(stock, 0) * row.unitCostMillis),
+      valueMillis: inventoryStockValueMillis(stock, row.unitCostMillis),
     };
   });
 }
@@ -346,22 +347,52 @@ export function getInventoryValueByCategory(rows: InventoryValueRow[]): Category
 
 export type LocationValueRow = { locationId: string; locationName: string; valueMillis: number };
 
-/** Stock value per location, valued at current ingredient costs. */
+/**
+ * Stock value per location, valued at current ingredient costs.
+ *
+ * PostgreSQL nets every signed ledger movement per location and ingredient
+ * first. The application then applies the same final-stock value rule as
+ * {@link getInventoryValuation}; deductions must reduce stock before valuation.
+ */
 export async function getInventoryValueByLocation(organizationId: string): Promise<LocationValueRow[]> {
   const rows = await getDb()
     .select({
       locationId: locations.id,
       locationName: locations.name,
-      valueMillis: sql<string>`coalesce(sum(greatest(${stockMovements.quantity}, 0) * ${ingredients.latestUnitCostMillis}), 0)`,
+      ingredientId: stockMovements.ingredientId,
+      unitCostMillis: ingredients.latestUnitCostMillis,
+      stock: sql<string>`coalesce(sum(${stockMovements.quantity}), 0)`,
     })
     .from(locations)
-    .leftJoin(stockMovements, eq(stockMovements.locationId, locations.id))
-    .leftJoin(ingredients, eq(ingredients.id, stockMovements.ingredientId))
+    .leftJoin(
+      stockMovements,
+      and(eq(stockMovements.locationId, locations.id), eq(stockMovements.organizationId, organizationId)),
+    )
+    .leftJoin(
+      ingredients,
+      and(
+        eq(ingredients.id, stockMovements.ingredientId),
+        eq(ingredients.organizationId, organizationId),
+        eq(ingredients.isActive, true),
+      ),
+    )
     .where(eq(locations.organizationId, organizationId))
-    .groupBy(locations.id, locations.name)
-    .orderBy(desc(sql`coalesce(sum(greatest(${stockMovements.quantity}, 0) * ${ingredients.latestUnitCostMillis}), 0)`));
+    .groupBy(locations.id, locations.name, stockMovements.ingredientId, ingredients.latestUnitCostMillis);
 
-  return rows.map(row => ({ ...row, valueMillis: Math.round(toNumber(row.valueMillis)) }));
+  const values = new Map<string, LocationValueRow>();
+  for (const row of rows) {
+    const current = values.get(row.locationId) ?? {
+      locationId: row.locationId,
+      locationName: row.locationName,
+      valueMillis: 0,
+    };
+    if (row.ingredientId && row.unitCostMillis !== null) {
+      current.valueMillis += inventoryStockValueMillis(toNumber(row.stock), row.unitCostMillis);
+    }
+    values.set(row.locationId, current);
+  }
+
+  return [...values.values()].sort((a, b) => b.valueMillis - a.valueMillis);
 }
 
 // ---------------------------------------------------------------------- suppliers

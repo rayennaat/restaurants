@@ -425,8 +425,10 @@ describe("unauthorized location: a payload cannot reach another site", () => {
   it("inventory and overview share the canonical valuation query", () => {
     const inventory = read("src/server/queries/inventory.ts");
     const analytics = read("src/server/queries/analytics.ts");
+    const valuation = read("src/lib/inventory-valuation.ts");
     expect(inventory).toMatch(/return getInventoryValuation\(\{ organizationId, locationId \}\)/);
-    expect(analytics).toMatch(/Math\.max\(stock, 0\) \* row\.unitCostMillis/);
+    expect(analytics).toMatch(/inventoryStockValueMillis\(stock, row\.unitCostMillis\)/);
+    expect(valuation).toMatch(/Math\.max\(stock, 0\) \* unitCostMillis/);
     expect(inventory).not.toMatch(/Math\.round\(stock \* row\.unitCostMillis\)/);
   });
 
