@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   title: { default: "Yield Restaurant OS", template: "%s | Yield" },
   description: "Inventory, recipe costing, waste and restaurant profitability in one operating system.",
   manifest: "/manifest.webmanifest",
-  icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-192.png" },
+  icons: { icon: "/logos/logo2.png", apple: "/logos/logo2.png" },
   appleWebApp: { capable: true, title: "Yield", statusBarStyle: "default" },
 };
 export const viewport: Viewport = { themeColor: "#166534" };
