@@ -112,6 +112,8 @@ describe("direct server-action bypass: nothing runs without a session", () => {
       "The redeemer is not yet a member of the organization they are joining. Authenticates with supabase.auth.getUser() directly.",
     "auth.ts:resolvePostAuthRoute":
       "Read-only post-auth routing helper; it authenticates through the shared platform-admin and tenant resolvers.",
+    "auth.ts:updatePassword":
+      "Password recovery authenticates through the recovered Supabase session and has no restaurant tenant context.",
     "auth.ts:registerWithAuthorization":
       "Runs before membership exists, but validates an employee or owner authorization token before creating a Supabase Auth user.",
     "auth.ts:requestPasswordReset":
@@ -142,6 +144,11 @@ describe("direct server-action bypass: nothing runs without a session", () => {
           expect(action.body).toContain("getTenantContext");
           return;
         }
+        if (action.key === "auth.ts:updatePassword") {
+          expect(action.body).toContain("auth.getUser()");
+          expect(action.body).toContain("auth.updateUser");
+          return;
+        }
         if (action.key === "auth.ts:registerWithAuthorization") {
           expect(action.body).toContain("supabase.auth.signUp");
           return;
@@ -163,6 +170,7 @@ describe("unauthorized role: every mutation consults the permission matrix", () 
     "organization.ts:createWorkspace": "No role exists yet; a valid owner onboarding token authorizes the caller to become the owner.",
     "team.ts:acceptInvitation": "Possession of the invitation token is the authorization; the role comes from the row.",
     "auth.ts:resolvePostAuthRoute": "Read-only post-auth routing helper; authentication is delegated to shared server guards.",
+    "auth.ts:updatePassword": "Password recovery uses the recovered Supabase Auth session and has no workspace role.",
     "auth.ts:registerWithAuthorization": "A valid employee or owner token is the authorization before an Auth user exists.",
     "auth.ts:requestPasswordReset": "Password reset is a Supabase Auth operation and has no workspace role.",
     "platform-admin.ts:issuePlatformOwnerInvitation": "Platform-admin allowlist authorization replaces restaurant permissions.",
@@ -231,6 +239,7 @@ describe("cross-tenant write: the organization is never taken from the request",
     const EXEMPT: Record<string, string> = {
       "sales-import.ts:previewSalesImport": "Delegates every read to planImport(values, tenant), which scopes by organization.",
       "auth.ts:resolvePostAuthRoute": "Post-auth routing resolves platform access before tenant state.",
+      "auth.ts:updatePassword": "Password recovery updates Supabase Auth credentials without application organization scope.",
       "auth.ts:registerWithAuthorization": "Validates an employee or owner authorization token before creating an Auth user.",
       "auth.ts:requestPasswordReset": "Supabase Auth recovery has no application organization scope.",
       "platform-admin.ts:issuePlatformOwnerInvitation": "Platform-admin scope is the active allowlist, not a restaurant organization.",

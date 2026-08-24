@@ -71,6 +71,7 @@ const EXEMPT: Record<string, string> = {
   // These operations happen before a Supabase Auth user has a workspace or
   // membership, so there is no organization audit trail to append to.
   "auth.ts:resolvePostAuthRoute": "Read-only routing decision; it writes no application state.",
+  "auth.ts:updatePassword": "Password recovery changes Supabase Auth credentials and has no tenant audit context.",
   "auth.ts:registerWithAuthorization": "Pre-workspace Auth account creation is authorized by an employee or owner token.",
   "auth.ts:requestPasswordReset": "Supabase Auth recovery is unauthenticated and has no workspace audit context.",
 

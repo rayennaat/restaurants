@@ -25,6 +25,11 @@ export async function GET(request: Request) {
     await supabase.auth.exchangeCodeForSession(code);
   }
   const requestedNext = safeNextPathOr(searchParams.get("next"), "/onboarding");
-  const destination = await resolvePostAuthRoute(requestedNext);
+  // Password recovery is not a normal login destination. After the PKCE code is
+  // exchanged above, keep the recovered session on the reset screen even when
+  // the account is also a platform admin or restaurant member.
+  const destination = requestedNext === "/reset-password"
+    ? requestedNext
+    : await resolvePostAuthRoute(requestedNext);
   return NextResponse.redirect(`${origin}${destination}`);
 }

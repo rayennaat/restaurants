@@ -4,6 +4,20 @@ import { describe, expect, it } from "vitest";
 const read = (path: string) => readFileSync(path, "utf8");
 
 describe("platform administration boundaries", () => {
+  it("keeps password recovery routed through the PKCE callback to reset-password", () => {
+    const auth = read("src/server/actions/auth.ts");
+    const callback = read("src/app/auth/callback/route.ts");
+    const reset = read("src/app/reset-password/page.tsx");
+    expect(auth).toContain("resetPasswordForEmail");
+    expect(auth).toContain("/auth/callback?next=/reset-password");
+    expect(callback).toContain("exchangeCodeForSession");
+    expect(callback).toContain('requestedNext === "/reset-password"');
+    expect(callback).toContain("resolvePostAuthRoute");
+    expect(reset).toContain("updatePassword");
+    expect(reset).toContain("New password");
+    expect(reset).toContain("Confirm password");
+  });
+
   it("gives active platform admins priority after authentication", () => {
     const auth = read("src/server/actions/auth.ts");
     const login = read("src/components/auth/auth-form.tsx");

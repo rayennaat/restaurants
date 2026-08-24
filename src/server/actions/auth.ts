@@ -72,8 +72,27 @@ export async function requestPasswordReset(email: string): Promise<ActionResult>
     const supabase = await createClient();
     const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
     const result = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: `${origin}/auth/callback?next=/auth/reset-password`,
+      // Keep the recovery link inside the existing PKCE callback. The callback
+      // exchanges the code into the SSR cookie session before redirecting here.
+      redirectTo: `${origin}/auth/callback?next=/reset-password`,
     });
+    if (result.error) return actionError(result.error.message);
+    return actionOk();
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function updatePassword(input: { password: string; confirmPassword: string }): Promise<ActionResult> {
+  try {
+    if (input.password.length < 8) return actionError("Your password must be at least 8 characters.");
+    if (input.password !== input.confirmPassword) return actionError("The passwords do not match.");
+
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return actionError("This password reset session is no longer valid. Request a new link.");
+
+    const result = await supabase.auth.updateUser({ password: input.password });
     if (result.error) return actionError(result.error.message);
     return actionOk();
   } catch (error) {
