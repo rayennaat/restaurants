@@ -8,10 +8,11 @@ import { toast } from "sonner";
 import { SupplierForm } from "@/components/forms/supplier-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { Modal } from "@/components/ui/modal";
+import { Table, TBody, TD, TDNum, TH, THead, TR } from "@/components/ui/table";
 import { formatMoney } from "@/lib/money";
 import { formatRelative } from "@/lib/utils";
 import { deleteSupplier, setSupplierArchived } from "@/server/actions/suppliers";
@@ -90,68 +91,73 @@ export function SupplierDirectory({ rows, currency, canManage, isEmptyDirectory 
           <EmptyState icon={Truck} title="No suppliers match these filters" description="Try clearing the search box or switching the status filter." />
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {rows.map(supplier => (
-            <Card key={supplier.id} className="relative transition hover:border-green-700/40">
-              <CardContent className="pt-5">
-                <div className="flex items-start justify-between gap-2">
-                  <Link href={`/dashboard/suppliers/${supplier.id}`} className="min-w-0 flex-1">
-                    <h2 className="truncate font-black hover:text-green-800">{supplier.name}</h2>
-                    <p className="mt-0.5 truncate text-sm text-[var(--muted)]">{supplier.contactName ?? supplier.phone ?? supplier.email ?? "No contact details"}</p>
-                  </Link>
-                  <div className="flex shrink-0 items-center gap-1">
-                    {!supplier.isActive && <Badge>Archived</Badge>}
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b">
+            <h2 className="text-lg font-black">Supplier directory</h2>
+            <p className="text-sm text-[var(--muted)]">Products and purchase history first; price comparison stays below as intelligence.</p>
+          </CardHeader>
+          <Table className="min-w-[860px]">
+            <THead>
+              <TR className="hover:bg-transparent">
+                <TH>Supplier</TH>
+                <TH>Contact</TH>
+                <TH className="text-right">Products</TH>
+                <TH className="text-right">Invoices</TH>
+                <TH className="text-right">Total spend</TH>
+                <TH>Last activity</TH>
+                <TH className="w-12" />
+              </TR>
+            </THead>
+            <TBody>
+              {rows.map(supplier => (
+                <TR key={supplier.id}>
+                  <TD>
+                    <Link href={`/dashboard/suppliers/${supplier.id}`} className="font-bold text-green-900 hover:underline">
+                      {supplier.name}
+                    </Link>
+                    {!supplier.isActive && <Badge className="ml-2">Archived</Badge>}
+                  </TD>
+                  <TD className="text-sm text-[var(--muted)]">{supplier.contactName ?? supplier.phone ?? supplier.email ?? "No contact details"}</TD>
+                  <TDNum className="font-semibold">{supplier.productCount}</TDNum>
+                  <TDNum>{supplier.purchaseCount}</TDNum>
+                  <TDNum className="font-semibold">{formatMoney(supplier.totalSpendMillis, currency)}</TDNum>
+                  <TD className="text-xs text-[var(--muted)]">{supplier.purchaseCount > 0 ? `Last ${formatRelative(supplier.lastPurchaseAt!)}` : "No invoices yet"}</TD>
+                  <TD className="relative text-right">
                     {canManage && (
                       <button type="button" aria-label={`Actions for ${supplier.name}`} onClick={() => setMenuFor(menuFor === supplier.id ? null : supplier.id)} className="rounded-lg p-1.5 text-[var(--muted)] transition hover:bg-neutral-100">
                         <MoreHorizontal size={18} />
                       </button>
                     )}
-                  </div>
-                </div>
-
-                {menuFor === supplier.id && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setMenuFor(null)} />
-                    <div className="absolute right-4 top-14 z-20 w-52 overflow-hidden rounded-xl border bg-white py-1 shadow-xl">
-                      <button type="button" onClick={() => { setMenuFor(null); setEditing(supplier); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-50">
-                        <Pencil size={15} /> Edit details
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => runAction(setSupplierArchived(supplier.id, supplier.isActive), supplier.isActive ? "Supplier archived" : "Supplier restored")}
-                        className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-50"
-                      >
-                        {supplier.isActive ? <><Archive size={15} /> Archive</> : <><ArchiveRestore size={15} /> Restore</>}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { if (confirm(`Permanently delete “${supplier.name}”?`)) runAction(deleteSupplier(supplier.id), "Supplier deleted"); }}
-                        className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 size={15} /> Delete
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-neutral-50 p-3">
-                    <p className="text-xs text-[var(--muted)]">Products</p>
-                    <b className="tabular-nums">{supplier.productCount}</b>
-                  </div>
-                  <div className="rounded-xl bg-green-50 p-3">
-                    <p className="text-xs text-green-700">Total spend</p>
-                    <b className="tabular-nums">{formatMoney(supplier.totalSpendMillis, currency)}</b>
-                  </div>
-                </div>
-
-                <p className="mt-3 text-xs text-[var(--muted)]">
-                  {supplier.purchaseCount > 0 ? `${supplier.purchaseCount} invoice${supplier.purchaseCount > 1 ? "s" : ""} · last ${formatRelative(supplier.lastPurchaseAt!)}` : "No invoices recorded yet"}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                    {menuFor === supplier.id && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setMenuFor(null)} />
+                        <div className="absolute right-4 top-10 z-20 w-52 overflow-hidden rounded-lg border bg-white py-1 text-left shadow-xl">
+                          <button type="button" onClick={() => { setMenuFor(null); setEditing(supplier); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-50">
+                            <Pencil size={15} /> Edit details
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => runAction(setSupplierArchived(supplier.id, supplier.isActive), supplier.isActive ? "Supplier archived" : "Supplier restored")}
+                            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-50"
+                          >
+                            {supplier.isActive ? <><Archive size={15} /> Archive</> : <><ArchiveRestore size={15} /> Restore</>}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { if (confirm(`Permanently delete “${supplier.name}”?`)) runAction(deleteSupplier(supplier.id), "Supplier deleted"); }}
+                            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 size={15} /> Delete
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </Card>
       )}
 
       {createModal}

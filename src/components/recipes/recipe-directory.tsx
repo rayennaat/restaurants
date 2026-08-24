@@ -85,7 +85,7 @@ export function RecipeDirectory({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <FilterBar
           searchPlaceholder="Search preparations…"
@@ -115,7 +115,7 @@ export function RecipeDirectory({
           <EmptyState icon={Soup} title="No preparations match these filters" description="Try clearing the search box or switching the status filter." />
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {recipes.map(recipe => (
             <RecipeCard key={recipe.id} recipe={recipe} currency={currency} canManage={canManage} onEdit={setEditing} runAction={runAction} />
           ))}
@@ -164,7 +164,7 @@ function RecipeCard({
   const usedByRecipes = recipe.usedIn.filter(entry => entry.kind === "recipe");
 
   return (
-    <Card className="relative flex flex-col">
+    <Card className={hasCycle ? "relative flex flex-col border-red-200 bg-red-50/40" : costing.hasUncostedIngredient ? "relative flex flex-col border-amber-200 bg-amber-50/30" : "relative flex flex-col"}>
       <CardContent className="flex flex-1 flex-col pt-5">
         <div className="flex items-start justify-between gap-2">
           <button type="button" onClick={() => setExpanded(!expanded)} className="min-w-0 flex-1 text-left">
@@ -189,7 +189,7 @@ function RecipeCard({
         {menuOpen && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-            <div className="absolute right-4 top-14 z-20 w-52 overflow-hidden rounded-xl border bg-white py-1 shadow-xl">
+            <div className="absolute right-4 top-14 z-20 w-52 overflow-hidden rounded-lg border bg-white py-1 shadow-xl">
               <button type="button" onClick={() => { setMenuOpen(false); onEdit(recipe); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-50">
                 <Pencil size={15} /> Edit preparation
               </button>
@@ -212,17 +212,17 @@ function RecipeCard({
         )}
 
         {hasCycle ? (
-          <p className="mt-4 flex items-start gap-2 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-800">
+          <p className="mt-4 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-xs font-semibold text-red-800">
             <AlertTriangle size={15} className="mt-px shrink-0" />
             Circular reference: {costing.circularPath.join(" → ")}. Remove one of these links to restore costing.
           </p>
         ) : (
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-neutral-50 p-3">
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-neutral-50 p-3">
               <p className="text-xs text-[var(--muted)]">Batch cost</p>
               <b className="tabular-nums">{formatMoney(costing.totalCostMillis, currency)}</b>
             </div>
-            <div className="rounded-xl bg-neutral-50 p-3">
+            <div className="rounded-lg bg-neutral-50 p-3">
               <p className="text-xs text-[var(--muted)]">Per {recipe.yieldUnitCode ?? "portion"}</p>
               <b className="tabular-nums">{formatMoney(costing.costPerServingMillis, currency)}</b>
             </div>
@@ -230,7 +230,7 @@ function RecipeCard({
         )}
 
         {recipe.usedIn.length > 0 ? (
-          <div className="mt-3 space-y-1.5 rounded-xl bg-neutral-50 p-3 text-xs text-[var(--muted)]">
+          <div className="mt-3 space-y-1.5 rounded-lg bg-neutral-50 p-3 text-xs text-[var(--muted)]">
             {usedByDishes.length > 0 && (
               <p className="flex items-start gap-1.5">
                 <UtensilsCrossed size={13} className="mt-0.5 shrink-0 text-green-700" />
@@ -245,11 +245,11 @@ function RecipeCard({
             )}
           </div>
         ) : (
-          <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900">Not used yet — add it to a dish on the Menu page to see it earn.</p>
+          <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs font-semibold text-amber-900">Not used yet — add it to a dish on the Menu page to see it earn.</p>
         )}
 
         {!hasCycle && costing.hasUncostedIngredient && (
-          <p className="mt-3 text-xs font-semibold text-amber-700">Some lines have no cost yet, so this total is understated.</p>
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-xs font-semibold text-amber-900">Some lines have no cost yet, so this total is understated.</p>
         )}
 
         {expanded && costing.lines.length > 0 && (

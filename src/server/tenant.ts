@@ -26,6 +26,8 @@ export type TenantContext = {
   locale: string;
   timezone: string;
   onboardingCompletedAt: Date | null;
+  plan: "pilot" | "starter" | "restaurant" | "multi_location";
+  status: "active" | "pilot" | "suspended" | "cancelled";
 };
 
 export type TenantState = TenantContext | { needsOnboarding: true; userId: string } | null;
@@ -55,6 +57,8 @@ export const getTenantContext = cache(async (): Promise<TenantState> => {
       locale: organizations.locale,
       timezone: organizations.timezone,
       onboardingCompletedAt: organizations.onboardingCompletedAt,
+      plan: organizations.plan,
+      status: organizations.status,
     })
     .from(organizationMembers)
     .innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
@@ -86,6 +90,8 @@ export const getTenantContext = cache(async (): Promise<TenantState> => {
     locale: row.locale,
     timezone: row.timezone,
     onboardingCompletedAt: row.onboardingCompletedAt,
+    plan: row.plan,
+    status: row.status,
   };
 });
 
@@ -97,6 +103,7 @@ export async function requireTenant(): Promise<TenantContext> {
   const tenant = await getTenantContext();
   if (!tenant) redirect("/auth/login");
   if ("needsOnboarding" in tenant) redirect("/onboarding");
+  if (tenant.status === "suspended" || tenant.status === "cancelled") redirect("/workspace-unavailable");
   return tenant;
 }
 

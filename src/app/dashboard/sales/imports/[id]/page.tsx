@@ -64,9 +64,9 @@ export default async function SalesImportDetailPage({ params }: { params: Promis
         <Figure label="Value" value={formatMoney(entry.totalMillis, tenant.currency)} />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+      <div className="mt-6 grid gap-5 xl:grid-cols-2">
         <Card>
-          <CardHeader>
+          <CardHeader className="border-b">
             <h2 className="text-lg font-black">How the columns were matched</h2>
             <p className="text-sm text-[var(--muted)]">The mapping used for this run, kept so it can be explained or repeated.</p>
           </CardHeader>
@@ -74,7 +74,7 @@ export default async function SalesImportDetailPage({ params }: { params: Promis
             {entry.mapping && Object.keys(entry.mapping).length > 0 ? (
               <dl className="space-y-2 text-sm">
                 {Object.entries(entry.mapping).map(([field, column]) => (
-                  <div key={field} className="flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5">
+                  <div key={field} className="flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5">
                     <dt className="font-semibold">{FIELD_LABELS[field as ImportField] ?? field}</dt>
                     <dd className="text-[var(--muted)]">{column}</dd>
                   </div>
@@ -87,7 +87,7 @@ export default async function SalesImportDetailPage({ params }: { params: Promis
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="border-b">
             <h2 className="text-lg font-black">What needed attention</h2>
             <p className="text-sm text-[var(--muted)]">
               {entry.duplicateRows > 0
@@ -102,7 +102,7 @@ export default async function SalesImportDetailPage({ params }: { params: Promis
                   const code = issue.code as ImportIssueCode;
                   const severity = ISSUE_SEVERITY[code];
                   return (
-                    <div key={issue.code} className="flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 text-sm">
+                    <div key={issue.code} className="flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5 text-sm">
                       <span className="flex items-center gap-2">
                         {severity && (
                           <Badge tone={severity === "error" ? "danger" : "warning"}>
@@ -125,7 +125,7 @@ export default async function SalesImportDetailPage({ params }: { params: Promis
 
       <section className="mt-6">
         <Card className="overflow-hidden">
-          <CardHeader>
+          <CardHeader className="border-b">
             <h2 className="text-lg font-black">Sales created</h2>
             <p className="text-sm text-[var(--muted)]">
               {entry.saleCount.toLocaleString()} sale{entry.saleCount === 1 ? "" : "s"} from this file, priced as the file

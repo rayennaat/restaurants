@@ -140,7 +140,7 @@ export function MenuItemForm({
         <Input type="number" step="0.001" min="0" {...register("yieldQuantity")} />
       </Field>
 
-      <div className="rounded-2xl border bg-white p-4">
+      <div className="rounded-lg border bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-black uppercase tracking-[.15em] text-[var(--muted)]">Cost per portion</p>

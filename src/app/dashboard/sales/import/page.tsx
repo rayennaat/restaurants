@@ -42,7 +42,7 @@ export default async function SalesImportPage() {
         action={
           <Link
             href="/dashboard/sales/imports"
-            className="inline-flex h-11 items-center gap-2 rounded-xl border bg-white px-4 font-semibold transition hover:bg-neutral-50"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border bg-white px-4 font-semibold transition hover:bg-neutral-50"
           >
             <History size={16} /> Import history
           </Link>
@@ -80,6 +80,15 @@ export default async function SalesImportPage() {
         </Card>
       ) : (
         <>
+          <div className="mb-4 grid gap-3 sm:grid-cols-4">
+            {["Upload", "Map", "Review", "Import"].map((step, index) => (
+              <div key={step} className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Step {index + 1}</p>
+                <p className="mt-1 font-black">{step}</p>
+              </div>
+            ))}
+          </div>
+
           <ImportWizard
             locations={location.options}
             menuItems={menuItems.map(item => ({
@@ -91,8 +100,8 @@ export default async function SalesImportPage() {
             defaultLocationId={location.id ?? location.options[0]?.id}
           />
 
-          <Card className="mt-6 border-neutral-200 bg-neutral-50/60">
-            <CardHeader>
+          <Card className="mt-5 border-neutral-200 bg-neutral-50/60">
+            <CardHeader className="border-b">
               <h2 className="text-base font-black">How importing works</h2>
             </CardHeader>
             <CardContent className="grid gap-3 text-sm text-[var(--muted)] sm:grid-cols-2">

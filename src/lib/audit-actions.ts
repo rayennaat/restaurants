@@ -27,6 +27,11 @@ export const AUDIT_LIFECYCLE_ACTIONS = ["create", "update", "delete", "archive",
  * name distinguishes them when you are reading the log a year later.
  */
 export const AUDIT_DOMAIN_ACTIONS = [
+  // Platform administration
+  "owner_invitation_issued",
+  "owner_invitation_revoked",
+  "organization_plan_changed",
+  "organization_status_changed",
   // Organization lifecycle
   "complete_setup",
   "reopen_setup",
@@ -107,6 +112,10 @@ const ENTITY_LABELS: Record<AuditEntityType, string> = {
 };
 
 const DOMAIN_PHRASES: Record<(typeof AUDIT_DOMAIN_ACTIONS)[number], string> = {
+  owner_invitation_issued: "issued an owner onboarding invitation",
+  owner_invitation_revoked: "revoked an owner onboarding invitation",
+  organization_plan_changed: "changed an organization's plan",
+  organization_status_changed: "changed an organization's access status",
   complete_setup: "completed workspace setup",
   reopen_setup: "reopened workspace setup",
   employee_invited: "invited an employee",

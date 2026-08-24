@@ -49,6 +49,21 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
         }
       />
 
+      <div className="mb-5 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Total</p>
+          <p className={isVoided ? "mt-1 text-2xl font-black tabular-nums text-[var(--muted)] line-through" : "mt-1 text-2xl font-black tabular-nums text-green-900"}>{formatMoney(sale.totalMillis, tenant.currency)}</p>
+        </div>
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Lines</p>
+          <p className="mt-1 text-2xl font-black tabular-nums">{sale.lines.length}</p>
+        </div>
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Source</p>
+          <p className="mt-1 text-sm font-bold">{SOURCE_LABELS[sale.source] ?? sale.source}</p>
+        </div>
+      </div>
+
       {isVoided && (
         <Card className="mb-6 border-red-200 bg-red-50/50">
           <CardContent className="pt-5">
@@ -62,7 +77,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
       )}
 
       <Card className="overflow-hidden">
-        <CardHeader>
+        <CardHeader className="border-b">
           <h2 className="text-lg font-black">Items sold</h2>
           <p className="text-sm text-[var(--muted)]">Priced as sold. A later menu change does not alter these figures.</p>
         </CardHeader>

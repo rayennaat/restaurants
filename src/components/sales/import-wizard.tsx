@@ -248,14 +248,14 @@ export function ImportWizard({
           <CardContent className="pt-5">
             <label
               htmlFor="sales-import-file"
-              className="grid cursor-pointer place-items-center rounded-2xl border-2 border-dashed px-6 py-14 text-center transition hover:border-green-700 hover:bg-green-50/40"
+              className="grid cursor-pointer place-items-center rounded-lg border-2 border-dashed px-6 py-10 text-center transition hover:border-green-700 hover:bg-green-50/40"
               onDragOver={event => event.preventDefault()}
               onDrop={event => {
                 event.preventDefault();
                 void onFile(event.dataTransfer.files[0]);
               }}
             >
-              <span className="grid size-14 place-items-center rounded-2xl bg-green-50 text-green-800">
+              <span className="grid size-12 place-items-center rounded-lg bg-green-50 text-green-800">
                 <Upload size={26} />
               </span>
               <b className="mt-4 block text-lg">Choose your sales file</b>
@@ -263,7 +263,7 @@ export function ImportWizard({
                 Export sales from your till as CSV and drop it here. Any format works — you will match up the columns on
                 the next screen. Nothing is imported until you have checked it.
               </span>
-              <span className="mt-5 inline-flex h-11 items-center rounded-xl bg-[var(--primary)] px-4 font-semibold text-white">
+              <span className="mt-5 inline-flex h-10 items-center rounded-lg bg-[var(--primary)] px-4 font-semibold text-white">
                 Select CSV file
               </span>
               <input
@@ -279,7 +279,7 @@ export function ImportWizard({
 
             {/* The example, offered beside the upload box rather than inside
                 it — it is a thing to look at first, not a file to submit. */}
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-neutral-50/70 px-4 py-3">
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-neutral-50/70 px-4 py-3">
               <p className="text-sm text-[var(--muted)]">
                 <b className="text-neutral-900">Not sure what the file should look like?</b> Download an example built
                 from your own menu. It is a template to compare against — downloading it does not import anything.
@@ -360,7 +360,7 @@ export function ImportWizard({
               </div>
 
               {missing.length > 0 && (
-                <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+                <p className="rounded-lg bg-amber-50 p-3 text-sm font-semibold text-amber-800">
                   Still needed: {missing.map(field => FIELD_LABELS[field]).join(", ")}.
                 </p>
               )}
@@ -688,7 +688,7 @@ function IssueSummary({ plan, onDownload }: { plan: ImportPlan; onDownload: () =
       </CardHeader>
       <CardContent className="space-y-2">
         {list.map(entry => (
-          <div key={entry.code} className="flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5">
+          <div key={entry.code} className="flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5">
             <span className="flex items-center gap-2 text-sm">
               <Badge tone={entry.severity === "error" ? "danger" : "warning"}>
                 {entry.severity === "error" ? "Skipped" : "Imported"}

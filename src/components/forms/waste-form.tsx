@@ -105,7 +105,7 @@ export function WasteForm({
       </Field>
 
       <Button className="w-full" disabled={isSubmitting}>
-        {isSubmitting ? "Recording…" : "Record waste"}
+        {isSubmitting ? "Recording…" : "Record waste & deduct stock"}
       </Button>
     </form>
   );

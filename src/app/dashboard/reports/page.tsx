@@ -92,12 +92,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         items={REPORTS.map(report => ({ label: report.label, href: tabHref(report.key), current: active === report.key }))}
       />
 
-      {/* Naming the selected report under the tabs keeps the workspace oriented:
-          the tab says which cut is showing, this says what that cut is for. */}
-      <h2 className="mb-5 border-t pt-4 text-sm text-[var(--muted)]">
-        <b className="text-base font-black text-[var(--foreground)]">{activeReport.label}</b>
-        <span className="ml-2">{activeReport.blurb}</span>
-      </h2>
+      <div className="mb-5 rounded-lg border bg-white px-4 py-3 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Current report</p>
+        <h2 className="mt-1 text-base font-black text-[var(--foreground)]">{activeReport.label}</h2>
+        <p className="mt-1 text-sm text-[var(--muted)]">{activeReport.blurb}</p>
+      </div>
 
       {active === "sales" && (
         <SalesReport scope={scope} range={range} organizationId={tenant.organizationId} currency={tenant.currency} periodHint={periodHint} multiLocation={multiLocation} />
@@ -115,13 +114,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 /** Compact figure tile used at the head of each report. */
 function SummaryTile({ label, value, hint, tone = "neutral" }: { label: string; value: string; hint: string; tone?: "neutral" | "success" | "danger" }) {
   return (
-    <Card>
-      <CardContent className="pt-5">
+    <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
         <p className="text-sm font-semibold text-[var(--muted)]">{label}</p>
         <p className={cn("mt-1.5 text-2xl font-black tabular-nums", tone === "success" && "text-green-800", tone === "danger" && "text-red-700")}>{value}</p>
         <p className="mt-1 text-xs text-[var(--muted)]">{hint}</p>
-      </CardContent>
-    </Card>
+      </div>
   );
 }
 
@@ -179,8 +176,8 @@ async function SalesReport({
   const revenueChange = summary.revenue.changePercent;
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-4">
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-4">
         <SummaryTile label="Revenue" value={formatMoney(summary.revenue.current, currency)} hint={periodHint} tone="success" />
         <SummaryTile
           label="Transactions"
@@ -201,7 +198,7 @@ async function SalesReport({
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="border-b">
           <h3 className="font-black">Revenue trend</h3>
           <p className="text-sm text-[var(--muted)]">
             {range.granularity === "day" ? "Daily" : range.granularity === "week" ? "Weekly" : "Monthly"} totals · {periodHint}
@@ -226,7 +223,7 @@ async function SalesReport({
       </Card>
 
       <Card className="overflow-hidden">
-        <CardHeader>
+        <CardHeader className="border-b">
           <h3 className="font-black">Sales by menu item</h3>
           <p className="text-sm text-[var(--muted)]">
             Ranked by revenue. Average price is revenue ÷ units, so a mid-period price change shows as a blended figure.
@@ -294,7 +291,7 @@ async function SalesReport({
       )}
 
       <Card className="overflow-hidden">
-        <CardHeader>
+        <CardHeader className="border-b">
           <h3 className="font-black">Theoretical ingredient consumption</h3>
           <p className="text-sm text-[var(--muted)]">
             What these sales should have used, expanded through your recipes and any preparations inside them. Valued at current
@@ -314,7 +311,7 @@ async function SalesReport({
           <>
             {consumption.unmappedUnits > 0 && (
               <CardContent className="pt-0">
-                <p className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
+                <p className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
                   <b>{consumption.unmappedUnits.toLocaleString()} sold unit{consumption.unmappedUnits === 1 ? "" : "s"}</b> came from{" "}
                   {consumption.unmappedMenuItemIds.length} dish{consumption.unmappedMenuItemIds.length === 1 ? "" : "es"} with no
                   composition, so they add nothing below. The real consumption is higher than shown.
@@ -401,8 +398,8 @@ async function WasteReport({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-3">
         <SummaryTile label="Total waste cost" value={formatMoney(summary.cost.current, currency)} hint={periodHint} tone="danger" />
         <SummaryTile label="Waste entries" value={String(summary.events)} hint={`${summary.ingredientCount} ingredient${summary.ingredientCount === 1 ? "" : "s"} affected`} />
         <SummaryTile
@@ -414,7 +411,7 @@ async function WasteReport({
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="border-b">
           <h3 className="font-black">Waste over time</h3>
           <p className="text-sm text-[var(--muted)]">
             {range.granularity === "day" ? "Daily" : range.granularity === "week" ? "Weekly" : "Monthly"} totals · {periodHint}
@@ -425,7 +422,7 @@ async function WasteReport({
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-5 xl:grid-cols-2">
         <Card className="overflow-hidden">
           <CardHeader>
             <h3 className="font-black">Waste by reason</h3>
@@ -556,8 +553,8 @@ async function InventoryReport({
   const byCategory = getInventoryValueByCategory(snapshot.rows);
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-4">
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-4">
         <SummaryTile label="Inventory value" value={formatMoney(snapshot.totalValueMillis, currency)} hint={locationName} tone="success" />
         <SummaryTile label="Active ingredients" value={String(snapshot.activeCount)} hint="Tracked in this workspace" />
         <SummaryTile label="Low stock" value={String(snapshot.lowStock.length)} hint="At or below minimum" tone={snapshot.lowStock.length > 0 ? "danger" : "neutral"} />
@@ -616,7 +613,7 @@ async function InventoryReport({
         </Card>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-5 xl:grid-cols-2">
         <Card className="overflow-hidden">
           <CardHeader>
             <h3 className="font-black">Value by category</h3>
@@ -769,8 +766,8 @@ async function SupplierPriceReport({ scope, range, currency }: { scope: Scope; r
   const increases = changes.filter(row => (row.changePercent ?? 0) > 0);
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-3">
         <SummaryTile label="Tracked prices" value={String(changes.length)} hint="Supplier + ingredient pairings" />
         <SummaryTile label="Price increases" value={String(increases.length)} hint="Latest price above the one before" tone={increases.length > 0 ? "danger" : "success"} />
         <SummaryTile label="Multi-supplier items" value={String(comparison.length)} hint="Ingredients you can price-shop" />
@@ -853,7 +850,7 @@ async function SupplierPriceReport({ scope, range, currency }: { scope: Scope; r
       )}
 
       <Card className="overflow-hidden">
-        <CardHeader>
+        <CardHeader className="border-b">
           <h3 className="font-black">Cheapest supplier per ingredient</h3>
           <p className="text-sm text-[var(--muted)]">
             {comparison.length > 0 ? "Ingredients offered by more than one supplier, with the spread between cheapest and dearest" : "Needs at least two suppliers on the same ingredient"}
@@ -883,7 +880,7 @@ async function SupplierPriceReport({ scope, range, currency }: { scope: Scope; r
                     return (
                       <div
                         key={offer.supplierId}
-                        className={cn("flex items-center justify-between gap-2 rounded-xl border p-2.5", cheapest && "border-green-300 bg-green-50/60")}
+                        className={cn("flex items-center justify-between gap-2 rounded-lg border p-2.5", cheapest && "border-green-300 bg-green-50/60")}
                       >
                         <span className="min-w-0 truncate text-sm">{offer.supplierName}</span>
                         <span className="flex shrink-0 items-center gap-2">
@@ -946,8 +943,8 @@ async function MenuProfitabilityReport({ organizationId, currency }: { organizat
   const totalCost = costed.reduce((total, item) => total + item.economics.totalCostMillis, 0);
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-4">
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-4">
         <SummaryTile label="Costed items" value={`${costed.length} / ${menuItems.length}`} hint="Menu items with a composition" />
         <SummaryTile label="Combined menu price" value={formatMoney(totalRevenue, currency)} hint="One of each costed item" />
         <SummaryTile label="Combined plate cost" value={formatMoney(totalCost, currency)} hint="Including packaging" />
@@ -973,7 +970,7 @@ async function MenuProfitabilityReport({ organizationId, currency }: { organizat
       )}
 
       <Card className="overflow-hidden">
-        <CardHeader>
+        <CardHeader className="border-b">
           <h3 className="font-black">Profitability ranking</h3>
           <p className="text-sm text-[var(--muted)]">Priced against live ingredient costs, most profitable first</p>
         </CardHeader>

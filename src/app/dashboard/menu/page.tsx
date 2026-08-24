@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ArrowRight, Soup, UtensilsCrossed } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { MenuTable } from "@/components/recipes/menu-table";
 import { listIngredientOptions } from "@/server/queries/ingredients";
@@ -25,6 +27,32 @@ export default async function MenuPage() {
         title="Menu"
         description="What you sell, what it costs and what it earns. Costs come straight from current ingredient prices, so a supplier price change re-prices every dish here."
       />
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-white px-4 py-3 shadow-sm">
+        <p className="inline-flex items-center gap-2 text-sm text-[var(--muted)]">
+          <UtensilsCrossed size={16} className="text-green-800" />
+          Dishes can use ingredients directly or preparations from Recipes.
+        </p>
+        <Link href="/dashboard/recipes" className="inline-flex items-center gap-1.5 text-sm font-semibold text-green-900 hover:underline">
+          Open recipes <ArrowRight size={14} />
+        </Link>
+      </div>
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Menu items</p>
+          <p className="mt-1 text-2xl font-black tabular-nums">{menuItems.length}</p>
+        </div>
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]"><Soup size={13} /> Preparations</p>
+          <p className="mt-1 text-2xl font-black tabular-nums">{preparations.length}</p>
+        </div>
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Costed items</p>
+          <p className="mt-1 text-2xl font-black tabular-nums text-green-900">{menuItems.filter(item => item.economics.isCosted).length}</p>
+        </div>
+      </div>
+
       <MenuTable
         rows={menuItems}
         ingredients={ingredients}

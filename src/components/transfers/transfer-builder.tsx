@@ -140,10 +140,10 @@ export function TransferBuilder({
     setLines(current => [...current, { key: Math.max(...current.map(line => line.key)) + 1, ingredientId: "", quantity: "", unitCode: "" }]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* ------------------------------------------------------- from → to */}
       <Card>
-        <CardHeader>
+        <CardHeader className="border-b">
           <h2 className="text-lg font-black">Where is the stock going?</h2>
           <p className="text-sm text-[var(--muted)]">
             Stock leaves the source when you send, and arrives at the destination when someone there confirms it.
@@ -192,7 +192,7 @@ export function TransferBuilder({
 
       {/* -------------------------------------------------------- the lines */}
       <Card>
-        <CardHeader>
+        <CardHeader className="border-b">
           <h2 className="text-lg font-black">What is moving?</h2>
           <p className="text-sm text-[var(--muted)]">
             Quantities can be entered in any compatible unit — the ledger records the ingredient&apos;s base unit.
@@ -203,7 +203,7 @@ export function TransferBuilder({
             const options = line.ingredient ? compatibleUnits(units, line.ingredient.baseUnitCode) : units;
             return (
               <div key={line.key} className="space-y-1">
-                <div className="flex items-end gap-2">
+                <div className="grid gap-2 sm:grid-cols-[1fr_7rem_7rem_auto] sm:items-end">
                   <span className="flex-1">
                     <Select
                       aria-label={`Ingredient ${index + 1}`}
@@ -233,7 +233,7 @@ export function TransferBuilder({
                     min="0"
                     step="any"
                     inputMode="decimal"
-                    className="h-11 w-28 text-right"
+                    className="h-10 w-full text-right"
                     placeholder="0"
                     value={line.quantity}
                     onChange={event =>
@@ -241,7 +241,7 @@ export function TransferBuilder({
                     }
                   />
 
-                  <span className="w-28 shrink-0">
+                  <span className="shrink-0">
                     <Select
                       aria-label={`Unit ${index + 1}`}
                       value={line.unitCode}
@@ -261,7 +261,7 @@ export function TransferBuilder({
                   <Button
                     type="button"
                     variant="secondary"
-                    className="h-11 shrink-0 px-3"
+                    className="h-10 shrink-0 px-3"
                     aria-label={`Remove line ${index + 1}`}
                     disabled={lines.length === 1}
                     onClick={() => setLines(current => current.filter(entry => entry.key !== line.key))}
@@ -293,7 +293,7 @@ export function TransferBuilder({
       {/* ------------------------------------------------------ review + send */}
       <Card>
         <CardContent className="pt-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-neutral-50 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-neutral-50 px-4 py-3">
             <span className="text-sm font-semibold">
               {usable.length} ingredient{usable.length === 1 ? "" : "s"} moving
             </span>
@@ -301,14 +301,14 @@ export function TransferBuilder({
           </div>
 
           {anyShort && (
-            <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">
+            <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-700">
               Some lines ask for more than the source location holds. Reduce them, or save a draft and send once stock arrives.
             </p>
           )}
 
           <FormError message={error} className="mt-3" />
 
-          <div className="mt-4 flex flex-wrap gap-3">
+          <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
             <Button onClick={() => submit(true)} disabled={pending || !canSubmit || anyShort}>
               {pending ? "Working…" : (<><Send size={16} /> Send now</>)}
             </Button>

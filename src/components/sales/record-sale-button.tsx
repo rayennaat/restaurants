@@ -144,7 +144,7 @@ export function RecordSaleButton({
                   min="0"
                   step="any"
                   inputMode="decimal"
-                  className="h-11 w-24 text-right"
+                  className="h-10 w-24 text-right"
                   value={line.quantity}
                   onChange={event =>
                     setLines(current => current.map(entry => (entry.key === line.key ? { ...entry, quantity: event.target.value } : entry)))
@@ -153,7 +153,7 @@ export function RecordSaleButton({
                 <Button
                   type="button"
                   variant="secondary"
-                  className="h-11 shrink-0 px-3"
+                  className="h-10 shrink-0 px-3"
                   aria-label={`Remove item ${index + 1}`}
                   disabled={lines.length === 1}
                   onClick={() => setLines(current => current.filter(entry => entry.key !== line.key))}
@@ -176,7 +176,7 @@ export function RecordSaleButton({
             <Input name="note" placeholder="Anything worth remembering about this sale" />
           </Field>
 
-          <div className="flex items-center justify-between rounded-xl border bg-neutral-50 px-4 py-3">
+          <div className="flex items-center justify-between rounded-lg border bg-neutral-50 px-4 py-3">
             <span className="text-sm font-semibold">Total</span>
             <b className="text-lg tabular-nums">{formatMoney(total, currency)}</b>
           </div>

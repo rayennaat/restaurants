@@ -1,8 +1,8 @@
 import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "PlatePilot Restaurant Operations OS",
-    short_name: "PlatePilot",
+    name: "Yield Restaurant Operations OS",
+    short_name: "Yield",
     description: "Restaurant inventory, food cost, waste and profit control.",
     start_url: "/dashboard",
     display: "standalone",

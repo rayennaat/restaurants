@@ -68,14 +68,14 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         description="What you actually sold, at the prices you sold it for. Sales drive your revenue, your food cost, and how much stock your menu should have used."
         action={
           canRecord ? (
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <RecordSaleButton locations={location.options} menuItems={menuItems.map(item => ({ id: item.id, name: item.name, sellingPriceMillis: item.sellingPriceMillis }))} currency={tenant.currency} defaultLocationId={location.id ?? location.options[0]?.id} />
               <Link
                 href="/dashboard/sales/import"
-                className="inline-flex h-11 items-center gap-2 rounded-xl border bg-white px-4 font-semibold transition hover:bg-neutral-50"
+                className="inline-flex h-10 items-center gap-2 rounded-lg border bg-white px-3.5 text-sm font-semibold transition hover:bg-neutral-50"
               >
                 <FileUp size={16} /> Import CSV
               </Link>
-              <RecordSaleButton locations={location.options} menuItems={menuItems.map(item => ({ id: item.id, name: item.name, sellingPriceMillis: item.sellingPriceMillis }))} currency={tenant.currency} defaultLocationId={location.id ?? location.options[0]?.id} />
             </div>
           ) : undefined
         }
@@ -171,6 +171,56 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
             </Card>
           ) : (
             <>
+              {/* ----------------------------------------------------- recent */}
+              <section className="mt-5">
+                <Card className="overflow-hidden">
+                  <CardHeader className="flex flex-wrap items-start justify-between gap-3 border-b">
+                    <div>
+                      <h2 className="text-lg font-black">Recent sales</h2>
+                      <p className="text-sm text-[var(--muted)]">
+                        Voided sales stay listed so the record stays explicable — they are excluded from every figure above.
+                      </p>
+                    </div>
+                    <Link href="/dashboard/sales/import" className="text-sm font-semibold text-green-900 hover:underline">Import CSV</Link>
+                  </CardHeader>
+                  <Table className="min-w-[760px]">
+                    <THead>
+                      <TR className="hover:bg-transparent">
+                        <TH>Sale</TH>
+                        <TH>Location</TH>
+                        <TH>Source</TH>
+                        <TH>When</TH>
+                        <TH className="text-right">Lines</TH>
+                        <TH className="text-right">Total</TH>
+                      </TR>
+                    </THead>
+                    <TBody>
+                      {recent.map(sale => (
+                        <TR key={sale.id}>
+                          <TD>
+                            <Link href={`/dashboard/sales/${sale.id}`} className="font-bold text-green-900 hover:underline">
+                              {sale.reference ?? `Sale ${sale.id.slice(0, 8)}`}
+                            </Link>
+                            {sale.status === "voided" && (
+                              <Badge tone="danger" className="ml-2">
+                                Voided
+                              </Badge>
+                            )}
+                          </TD>
+                          <TD className="text-sm text-[var(--muted)]">{sale.locationName}</TD>
+                          <TD className="text-sm text-[var(--muted)]">{SOURCE_LABELS[sale.source] ?? sale.source}</TD>
+                          <TD className="text-sm text-[var(--muted)]">{sale.soldAt.toLocaleString()}</TD>
+                          <TDNum>{sale.lineCount}</TDNum>
+                          <TDNum className={sale.status === "voided" ? "text-[var(--muted)] line-through" : "font-semibold"}>
+                            {formatMoney(sale.totalMillis, tenant.currency)}
+                          </TDNum>
+                        </TR>
+                      ))}
+                    </TBody>
+                  </Table>
+                </Card>
+              </section>
+
               {/* ------------------------------------------------------- trend */}
               <section className="mt-8">
                 <Card>
@@ -202,7 +252,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
               </section>
 
               {/* -------------------------------------------- top sellers + sites */}
-              <section className="mt-6 grid gap-6 xl:grid-cols-2">
+              <section className="mt-6 grid gap-5 xl:grid-cols-2">
                 <Card className="overflow-hidden">
                   <CardHeader>
                     <h2 className="text-lg font-black">Top selling items</h2>
@@ -270,52 +320,6 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
                 )}
               </section>
 
-              {/* ----------------------------------------------------- recent */}
-              <section className="mt-6">
-                <Card className="overflow-hidden">
-                  <CardHeader>
-                    <h2 className="text-lg font-black">Recent sales</h2>
-                    <p className="text-sm text-[var(--muted)]">
-                      Voided sales stay listed so the record stays explicable — they are excluded from every figure above.
-                    </p>
-                  </CardHeader>
-                  <Table className="min-w-[760px]">
-                    <THead>
-                      <TR className="hover:bg-transparent">
-                        <TH>Sale</TH>
-                        <TH>Location</TH>
-                        <TH>Source</TH>
-                        <TH>When</TH>
-                        <TH className="text-right">Lines</TH>
-                        <TH className="text-right">Total</TH>
-                      </TR>
-                    </THead>
-                    <TBody>
-                      {recent.map(sale => (
-                        <TR key={sale.id}>
-                          <TD>
-                            <Link href={`/dashboard/sales/${sale.id}`} className="font-bold text-green-900 hover:underline">
-                              {sale.reference ?? `Sale ${sale.id.slice(0, 8)}`}
-                            </Link>
-                            {sale.status === "voided" && (
-                              <Badge tone="danger" className="ml-2">
-                                Voided
-                              </Badge>
-                            )}
-                          </TD>
-                          <TD className="text-sm text-[var(--muted)]">{sale.locationName}</TD>
-                          <TD className="text-sm text-[var(--muted)]">{SOURCE_LABELS[sale.source] ?? sale.source}</TD>
-                          <TD className="text-sm text-[var(--muted)]">{sale.soldAt.toLocaleString()}</TD>
-                          <TDNum>{sale.lineCount}</TDNum>
-                          <TDNum className={sale.status === "voided" ? "text-[var(--muted)] line-through" : "font-semibold"}>
-                            {formatMoney(sale.totalMillis, tenant.currency)}
-                          </TDNum>
-                        </TR>
-                      ))}
-                    </TBody>
-                  </Table>
-                </Card>
-              </section>
             </>
           )}
         </>

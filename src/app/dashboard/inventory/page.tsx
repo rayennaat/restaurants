@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Boxes, Coins, PackagePlus, PackageSearch, TrendingDown } from "lucide-react";
+import { AlertTriangle, Boxes, Coins, PackagePlus, PackageSearch, TrendingDown } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { SectionNav } from "@/components/dashboard/section-nav";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -49,7 +49,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
 
       <SectionNav />
 
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-white px-3 py-2 shadow-sm">
         <p className="text-sm text-[var(--muted)]">
           {inventory.length} active ingredient{inventory.length === 1 ? "" : "s"} · {location.name}
         </p>
@@ -68,23 +68,38 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
         </Card>
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-3">
+          {(outOfStock.length > 0 || lowStock.length > 0) && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-950">
+              <p className="inline-flex items-center gap-2">
+                <AlertTriangle size={16} />
+                <b>{outOfStock.length} out of stock</b>
+                <span>·</span>
+                <b>{lowStock.length} below minimum</b>
+              </p>
+              <Link href="/dashboard/purchases?view=new" className="font-semibold text-green-900 hover:underline">Receive purchase</Link>
+            </div>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-3">
             <StatCard label="Stock on hand" value={formatMoney(inventoryValue(inventory), tenant.currency)} hint={`${inventory.length} active ingredient${inventory.length === 1 ? "" : "s"} · ${location.name}`} icon={Coins} />
             <StatCard label="Below minimum" value={String(lowStock.length)} hint={`Reorder these first · ${location.name}`} icon={PackageSearch} />
             <StatCard label="Out of stock" value={String(outOfStock.length)} hint={`Zero or negative balance · ${location.name}`} icon={TrendingDown} />
           </div>
 
-          <div className="mt-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+          <div className="mt-5 grid items-start gap-5 xl:grid-cols-[2fr_.9fr]">
             <Card className="overflow-hidden">
-              <CardHeader>
-                <h2 className="text-lg font-black">Ingredient balances</h2>
-                <p className="text-sm text-[var(--muted)]">Valued at each ingredient&apos;s latest known unit cost.</p>
+              <CardHeader className="flex flex-wrap items-start justify-between gap-3 border-b">
+                <div>
+                  <h2 className="text-lg font-black">Ingredient balances</h2>
+                  <p className="text-sm text-[var(--muted)]">Valued at each ingredient&apos;s latest known unit cost.</p>
+                </div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Low and out rows are highlighted</span>
               </CardHeader>
               <InventoryTable data={inventory} currency={tenant.currency} />
             </Card>
 
-            <Card className="overflow-hidden">
-              <CardHeader>
+            <Card className="overflow-hidden xl:max-h-[34rem] xl:self-start">
+              <CardHeader className="border-b bg-white">
                 <h2 className="text-lg font-black">Recent movements</h2>
                 <p className="text-sm text-[var(--muted)]">Everything that moved this stock in or out.</p>
               </CardHeader>

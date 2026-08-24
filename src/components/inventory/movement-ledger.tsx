@@ -23,12 +23,13 @@ export function MovementLedger({ rows, currency }: { rows: MovementRow[]; curren
   }
 
   return (
-    <ul className="divide-y">
-      {rows.map(row => {
+    <div className="xl:max-h-[27rem] xl:overflow-y-auto xl:overscroll-contain">
+      <ul className="divide-y">
+      {rows.map((row, index) => {
         const meta = MOVEMENT_LABELS[row.type] ?? { label: row.type, tone: "neutral" as const };
         const isInbound = row.quantity >= 0;
         const body = (
-          <div className="flex items-start justify-between gap-3 px-5 py-3.5">
+          <div className="flex items-start justify-between gap-3 px-5 py-2.5">
             <div className="min-w-0">
               <b className="block truncate text-sm">{row.ingredientName}</b>
               <p className="mt-0.5 text-xs text-[var(--muted)]">
@@ -51,11 +52,12 @@ export function MovementLedger({ rows, currency }: { rows: MovementRow[]; curren
 
         // Purchase movements link back to the invoice that produced them.
         return (
-          <li key={row.id} className="transition hover:bg-neutral-50">
+          <li key={row.id} className={`transition hover:bg-neutral-50 ${index >= 8 ? "hidden xl:list-item" : ""}`}>
             {row.referenceType === "purchase" && row.referenceId ? <Link href={`/dashboard/purchases/${row.referenceId}`}>{body}</Link> : body}
           </li>
         );
       })}
-    </ul>
+      </ul>
+    </div>
   );
 }

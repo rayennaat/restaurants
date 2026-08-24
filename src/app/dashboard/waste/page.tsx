@@ -40,7 +40,7 @@ export default async function WastePage() {
         description="Log what gets thrown away. Each entry removes the stock and prices the loss at what that ingredient costs you, so spoilage becomes a number you can act on."
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3">
         <StatCard label="Last 14 days" value={formatMoney(summary.cost.current, tenant.currency)} hint="Total value lost" icon={AlertTriangle} />
         <StatCard
           label="Worst day"
@@ -51,9 +51,9 @@ export default async function WastePage() {
         <StatCard label="Entries" value={String(summary.events)} hint="Recorded in the last 14 days" icon={ClipboardList} />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1.4fr]">
+      <div className="mt-5 grid gap-5 lg:grid-cols-[.95fr_1.45fr]">
         <Card>
-          <CardHeader>
+          <CardHeader className="border-b bg-green-50/40">
             <h2 className="text-lg font-black">Record waste</h2>
             <p className="text-sm text-[var(--muted)]">Works offline — entries sync when you reconnect.</p>
           </CardHeader>
@@ -74,24 +74,14 @@ export default async function WastePage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <h2 className="text-lg font-black">Cost trend</h2>
-              <p className="text-sm text-[var(--muted)]">Last 14 days</p>
-            </CardHeader>
-            <CardContent>
-              {summary.cost.current === 0 ? (
-                <EmptyState icon={AlertTriangle} title="Nothing logged yet" description="Record your first entry and the trend will appear here." className="py-8" />
-              ) : (
-                <WasteChart data={trend} currency={tenant.currency} />
-              )}
-            </CardContent>
-          </Card>
-
+        <div className="space-y-5">
           <Card className="overflow-hidden">
-            <CardHeader>
-              <h2 className="text-lg font-black">Recent entries</h2>
+            <CardHeader className="flex flex-wrap items-start justify-between gap-3 border-b">
+              <div>
+                <h2 className="text-lg font-black">Recent entries</h2>
+                <p className="text-sm text-[var(--muted)]">Latest recorded waste, newest first.</p>
+              </div>
+              <span className="text-sm font-semibold tabular-nums text-red-700">{formatMoney(summary.cost.current, tenant.currency)} lost</span>
             </CardHeader>
             {entries.length === 0 ? (
               <EmptyState icon={AlertTriangle} title="No waste entries" description="Logged waste will show up here with its cost." className="py-8" />
@@ -114,12 +104,26 @@ export default async function WastePage() {
                       </TD>
                       <TD className="text-sm">{wasteReasonLabel(entry.reason)}</TD>
                       <TDNum>{formatQuantity(entry.quantity, entry.unit)}</TDNum>
-                      <TDNum className="font-semibold">{formatMoney(entry.costMillis, tenant.currency)}</TDNum>
+                      <TDNum className="font-semibold text-red-700">{formatMoney(entry.costMillis, tenant.currency)}</TDNum>
                     </TR>
                   ))}
                 </TBody>
               </Table>
             )}
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-black">Cost trend</h2>
+              <p className="text-sm text-[var(--muted)]">Last 14 days</p>
+            </CardHeader>
+            <CardContent>
+              {summary.cost.current === 0 ? (
+                <EmptyState icon={AlertTriangle} title="Nothing logged yet" description="Record your first entry and the trend will appear here." className="py-8" />
+              ) : (
+                <WasteChart data={trend} currency={tenant.currency} />
+              )}
+            </CardContent>
           </Card>
         </div>
       </div>

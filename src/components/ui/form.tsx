@@ -37,7 +37,7 @@ export function Field({
 
 export function FormError({ message, className }: { message?: string | null; className?: string }) {
   if (!message) return null;
-  return <p className={cn("rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700", className)}>{message}</p>;
+  return <p className={cn("rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-700", className)}>{message}</p>;
 }
 
 /** Submit button for `<form action={serverAction}>` that disables while pending. */

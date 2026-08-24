@@ -50,7 +50,7 @@ export function SetupChecklist({ progress }: { progress: SetupProgress }) {
           </p>
         </header>
 
-        <div className="mb-8 rounded-2xl border bg-white p-5 panel-shadow">
+        <div className="mb-8 rounded-lg border bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-4">
             <span className="text-sm font-bold">
               {progress.completedCount} of {progress.totalCount} complete
@@ -70,11 +70,11 @@ export function SetupChecklist({ progress }: { progress: SetupProgress }) {
             return (
               <li
                 key={step.key}
-                className={`rounded-2xl border bg-white p-5 transition ${isNext ? "border-green-700/50 panel-shadow" : step.isComplete ? "opacity-75" : ""}`}
+                className={`rounded-lg border bg-white p-5 transition ${isNext ? "border-green-700/50 shadow-sm" : step.isComplete ? "opacity-75" : ""}`}
               >
                 <div className="flex items-start gap-4">
                   <span
-                    className={`grid size-11 shrink-0 place-items-center rounded-xl ${
+                    className={`grid size-10 shrink-0 place-items-center rounded-lg ${
                       step.isComplete ? "bg-green-700 text-white" : isNext ? "bg-green-50 text-green-800" : "bg-neutral-100 text-[var(--muted)]"
                     }`}
                   >
@@ -108,7 +108,7 @@ export function SetupChecklist({ progress }: { progress: SetupProgress }) {
           })}
         </ol>
 
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-white p-5">
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-white p-5">
           <div>
             <p className="font-bold">{progress.allStepsComplete ? "Everything is ready." : "Want to explore first?"}</p>
             <p className="mt-0.5 text-sm text-[var(--muted)]">

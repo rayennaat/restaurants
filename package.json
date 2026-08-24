@@ -19,6 +19,8 @@
     "db:studio": "DB_ENV=local drizzle-kit studio",
     "db:studio:staging": "DB_ENV=staging drizzle-kit studio",
     "db:backup:staging": "node scripts/backup-staging.mjs",
+    "onboarding:issue-owner": "tsx scripts/issue-owner-onboarding.ts",
+    "platform-admin:set": "tsx scripts/set-platform-admin.ts",
     "db:seed": "tsx scripts/seed.ts",
     "verify:integrity": "node --env-file=.env.local --import tsx scripts/verify-integrity.ts",
     "verify:integrity:staging": "node --env-file=.env.staging --import tsx scripts/verify-integrity.ts",

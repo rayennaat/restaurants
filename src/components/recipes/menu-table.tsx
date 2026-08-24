@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Plus, Soup, Trash2, UtensilsCrossed } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, MoreHorizontal, Pencil, Plus, Soup, Trash2, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 import { MenuItemForm } from "@/components/forms/menu-item-form";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +59,8 @@ export function MenuTable({
     });
   }
 
+  const highFoodCost = rows.filter(row => row.economics.isCosted && row.economics.foodCostPercent > 35);
+
   const createModal = (
     <Modal open={creating} onClose={() => setCreating(false)} title="New menu item" description="Add what goes into it and see food cost and margin as you type." size="xl">
       <MenuItemForm
@@ -92,15 +94,22 @@ export function MenuTable({
 
   return (
     <div className="space-y-5">
-      {canManage && (
-        <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {highFoodCost.length > 0 ? (
+          <p className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50/70 px-4 py-2.5 text-sm font-semibold text-red-800">
+            <AlertTriangle size={16} /> {highFoodCost.length} high food-cost item{highFoodCost.length === 1 ? "" : "s"}
+          </p>
+        ) : (
+          <p className="text-sm text-[var(--muted)]">Food-cost warnings appear when a dish rises above 35%.</p>
+        )}
+        {canManage && (
           <Button onClick={() => setCreating(true)}>
             <Plus size={17} /> New menu item
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
-      <div className="overflow-hidden rounded-2xl border bg-white panel-shadow">
+      <div className="overflow-hidden rounded-lg border bg-white shadow-sm">
         <Table className="min-w-[900px]">
           <THead>
             <TR className="hover:bg-transparent">
@@ -118,7 +127,7 @@ export function MenuTable({
             {rows.map(row => {
               const { economics } = row;
               return (
-                <TR key={row.id}>
+                <TR key={row.id} className={economics.isCosted && economics.foodCostPercent > 35 ? "bg-red-50/50" : !economics.isCosted || row.lines.length === 0 ? "bg-amber-50/40" : undefined}>
                   <TD>
                     <b>{row.name}</b>
                     {row.category && <span className="block text-xs text-[var(--muted)]">{row.category}</span>}
@@ -158,7 +167,7 @@ export function MenuTable({
                         {menuFor === row.id && (
                           <>
                             <div className="fixed inset-0 z-10" onClick={() => setMenuFor(null)} />
-                            <div className="absolute right-4 top-12 z-20 w-48 overflow-hidden rounded-xl border bg-white py-1 shadow-xl">
+                            <div className="absolute right-4 top-12 z-20 w-48 overflow-hidden rounded-lg border bg-white py-1 shadow-xl">
                               <button type="button" onClick={() => { setMenuFor(null); setEditing(row); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-50">
                                 <Pencil size={15} /> Edit
                               </button>

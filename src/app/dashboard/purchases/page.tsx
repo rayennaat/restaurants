@@ -5,7 +5,7 @@ import { SectionNav } from "@/components/dashboard/section-nav";
 import { PurchaseInvoiceBuilder } from "@/components/forms/purchase-invoice-builder";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Button } from "@/components/ui/button";
+import { TabNav } from "@/components/ui/tab-nav";
 import { Table, TBody, TD, TDNum, TH, THead, TR } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { formatMoney } from "@/lib/money";
@@ -45,24 +45,31 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
         title="Purchases"
         description="Record the invoices you receive from suppliers. Each line adds stock, updates that ingredient's cost, and remembers the price your supplier charged."
         action={
-          <div className="flex gap-2">
-            <Link href="?view=list">
-              <Button variant={view === "list" ? "secondary" : "ghost"} size="sm">
-                Purchase history
-              </Button>
+          canPurchase ? (
+            <Link
+              href={view === "new" ? "?view=list" : "?view=new"}
+              className={
+                view === "new"
+                  ? "inline-flex h-10 items-center rounded-lg border bg-white px-3.5 text-sm font-semibold transition hover:bg-neutral-50"
+                  : "inline-flex h-10 items-center rounded-lg bg-[var(--primary)] px-3.5 text-sm font-semibold text-white transition hover:bg-green-800"
+              }
+            >
+              {view === "new" ? "Purchase history" : "New invoice"}
             </Link>
-            {canPurchase && (
-              <Link href="?view=new">
-                <Button variant={view === "new" ? "secondary" : "ghost"} size="sm">
-                  New invoice
-                </Button>
-              </Link>
-            )}
-          </div>
+          ) : undefined
         }
       />
 
       <SectionNav />
+
+      <TabNav
+        label="Purchase view"
+        className="mb-5"
+        items={[
+          { label: "Purchase history", href: "?view=list", current: view === "list" },
+          ...(canPurchase ? [{ label: "New invoice", href: "?view=new", current: view === "new" }] : []),
+        ]}
+      />
 
       {view === "new" ? (
         locs.length === 0 ? (
@@ -75,7 +82,15 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
             />
           </Card>
         ) : (
-          <div className="max-w-4xl">
+          <div className="w-full space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50/60 px-4 py-3 text-sm text-green-950">
+              <p>
+                <b>Receiving stock now.</b> Choose supplier, confirm location, add invoice lines, then receive once to update stock and costs.
+              </p>
+              <Link href="?view=list" className="font-semibold text-green-900 hover:underline">
+                Purchase history
+              </Link>
+            </div>
             <PurchaseInvoiceBuilder
               locations={locs}
               suppliers={suppliers}
@@ -97,7 +112,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
           />
         </Card>
       ) : (
-        <div className="overflow-hidden rounded-2xl border bg-white panel-shadow">
+        <div className="overflow-hidden rounded-lg border bg-white shadow-sm">
           <Table className="min-w-[800px]">
             <THead>
               <TR className="hover:bg-transparent">

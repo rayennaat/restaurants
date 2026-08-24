@@ -46,8 +46,8 @@ export default async function PurchaseDetailPage({ params }: { params: Promise<{
         }
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
-        <div className="overflow-hidden rounded-2xl border bg-white panel-shadow">
+      <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
+        <div className="overflow-hidden rounded-lg border bg-white shadow-sm">
           <Table className="min-w-[720px]">
             <THead>
               <TR className="hover:bg-transparent">

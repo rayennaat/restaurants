@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { safeNextPathOr } from "@/lib/redirects";
+import { resolvePostAuthRoute } from "@/server/actions/auth";
 import { NextResponse } from "next/server";
 
 /**
@@ -23,5 +24,7 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     await supabase.auth.exchangeCodeForSession(code);
   }
-  return NextResponse.redirect(`${origin}${safeNextPathOr(searchParams.get("next"), "/onboarding")}`);
+  const requestedNext = safeNextPathOr(searchParams.get("next"), "/onboarding");
+  const destination = await resolvePostAuthRoute(requestedNext);
+  return NextResponse.redirect(`${origin}${destination}`);
 }

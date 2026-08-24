@@ -51,7 +51,7 @@ export function FilterBar({ searchPlaceholder = "Search…", filters = [], class
   const hasFilters = [...searchParams.keys()].some(key => key === "q" || filters.some(filter => filter.name === key));
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-3", pending && "opacity-70", className)}>
+    <div className={cn("flex flex-wrap items-center gap-2.5 rounded-lg border bg-white px-3 py-2 shadow-sm", pending && "opacity-70", className)}>
       <div className="relative min-w-56 flex-1">
         <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
         <Input value={query} onChange={event => setQuery(event.target.value)} placeholder={searchPlaceholder} className="pl-9" aria-label={searchPlaceholder} />
@@ -62,7 +62,7 @@ export function FilterBar({ searchPlaceholder = "Search…", filters = [], class
           aria-label={filter.label}
           value={searchParams.get(filter.name) ?? filter.defaultValue ?? ""}
           onChange={event => apply({ [filter.name]: event.target.value === (filter.defaultValue ?? "") ? "" : event.target.value })}
-          className="h-11 w-auto min-w-36"
+          className="h-10 w-auto min-w-36"
         >
           {filter.options.map(option => (
             <option key={option.value} value={option.value}>
@@ -75,7 +75,7 @@ export function FilterBar({ searchPlaceholder = "Search…", filters = [], class
         <button
           type="button"
           onClick={() => startTransition(() => router.replace("?", { scroll: false }))}
-          className="inline-flex h-11 items-center gap-1.5 rounded-xl border bg-white px-3 text-sm font-semibold text-[var(--muted)] transition hover:bg-neutral-50"
+          className="inline-flex h-10 items-center gap-1.5 rounded-lg border bg-white px-3 text-sm font-semibold text-[var(--muted)] transition hover:bg-neutral-50"
         >
           <X size={15} />
           Clear

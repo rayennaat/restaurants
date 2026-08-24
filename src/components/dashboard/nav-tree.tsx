@@ -15,21 +15,14 @@ import { cn } from "@/lib/utils";
  *
  * ## The disclosure interaction
  *
- * A section header is a link *and* a disclosure, which is the one place this
- * could have become fiddly. It is split in two controls:
- *
- *   [ icon  Sales ............... ⌄ ]
- *     └ navigates                 └ expands
- *
- * Clicking the label goes to the section's main page — never a dead click — and
- * arriving there opens the section automatically, so the sub-pages reveal
- * themselves without the user knowing the chevron exists. The chevron is for
- * looking ahead without leaving the current screen. Only the chevron carries
- * `aria-expanded`, because only the chevron is the disclosure.
+ * A parent row with children is one disclosure button: icon, label and chevron
+ * all do the same thing. Navigation happens only after the user chooses a child
+ * page, which keeps "Sales" and its arrow from feeling like two unrelated
+ * targets. Rows without children remain normal links.
  */
 
 /** Shared row geometry, so a link and a disclosure button line up exactly. */
-const ROW = "flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition";
+const ROW = "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition";
 
 function Row({
   item,
@@ -66,42 +59,44 @@ function Row({
   const highlight = isCurrent || (collapsed && active.parentHref === item.href);
   const panelId = `nav-${item.href.replace(/\W+/g, "-")}`;
   const Icon = item.icon;
+  const rowClassName = cn(
+    ROW,
+    collapsed && "justify-center px-0",
+    highlight
+      ? "bg-green-50 font-bold text-green-900"
+      : "font-semibold text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900",
+  );
+  const iconClassName = cn("shrink-0", highlight ? "text-green-700" : "text-neutral-500");
 
   return (
     <li>
       <div className="relative flex items-center">
         {highlight && <span aria-hidden className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-green-700" />}
-        <Link
-          href={item.href}
-          onClick={onNavigate}
-          aria-current={isCurrent ? "page" : undefined}
-          title={collapsed ? item.label : undefined}
-          className={cn(
-            ROW,
-            collapsed && "justify-center px-0",
-            highlight
-              ? "bg-green-50 font-bold text-green-900"
-              : "font-semibold text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900",
-          )}
-        >
-          <Icon size={18} className={cn("shrink-0", highlight ? "text-green-700" : "text-neutral-500")} />
-          <span className={cn("truncate", collapsed && "sr-only")}>{item.label}</span>
-        </Link>
-
-        {item.children && !collapsed && (
+        {item.children && !collapsed ? (
           <button
             type="button"
             onClick={() => setManual(!open)}
             aria-expanded={open}
             aria-controls={panelId}
-            aria-label={`${open ? "Hide" : "Show"} ${item.label} pages`}
-            className="ml-0.5 grid size-7 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700"
+            className={rowClassName}
           >
-            <ChevronDown size={15} className={cn("transition-transform", open && "rotate-180")} />
+            <Icon size={18} className={iconClassName} />
+            <span className="truncate">{item.label}</span>
+            <ChevronDown size={15} className={cn("ml-auto shrink-0 text-neutral-400 transition-transform", open && "rotate-180")} />
           </button>
+        ) : (
+          <Link
+            href={item.href}
+            onClick={onNavigate}
+            aria-current={isCurrent ? "page" : undefined}
+            title={collapsed ? item.label : undefined}
+            className={rowClassName}
+          >
+            <Icon size={18} className={iconClassName} />
+            <span className={cn("truncate", collapsed && "sr-only")}>{item.label}</span>
+          </Link>
         )}
       </div>
-
       {item.children && !collapsed && (
         // Kept mounted and hidden rather than unmounted, so the chevron's
         // `aria-controls` always points at a real element.

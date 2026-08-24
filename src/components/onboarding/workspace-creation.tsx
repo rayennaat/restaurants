@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState, useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
-import { Plus, Store, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, FormError } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -30,7 +31,7 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
  * intended — the oldest membership wins when resolving the tenant, so an
  * employee who does both would keep landing in their own empty organization.
  */
-export function WorkspaceCreation({ pendingInvitations = [] }: { pendingInvitations?: string[] }) {
+export function WorkspaceCreation({ ownerToken }: { ownerToken: string }) {
   const router = useRouter();
   const [state, formAction] = useActionState(createWorkspace, null);
   const [locations, setLocations] = useState<string[]>([]);
@@ -115,9 +116,9 @@ export function WorkspaceCreation({ pendingInvitations = [] }: { pendingInvitati
 
   return (
     <main className="grid min-h-screen place-items-center p-5 grid-bg">
-      <div className="w-full max-w-lg rounded-3xl border bg-white p-8 panel-shadow">
-        <span className="grid size-12 place-items-center rounded-2xl bg-green-800 text-white">
-          <Store size={24} />
+      <div className="w-full max-w-lg rounded-lg border bg-white p-7 shadow-sm">
+        <span className="grid size-12 place-items-center overflow-hidden rounded-lg bg-white ring-1 ring-green-900/10">
+          <Image src="/logos/logo2.png" alt="Yield" width={1254} height={1254} className="size-full object-cover" />
         </span>
 
         <p className="mt-6 text-xs font-black uppercase tracking-[.2em] text-green-700">One-minute setup</p>
@@ -126,19 +127,8 @@ export function WorkspaceCreation({ pendingInvitations = [] }: { pendingInvitati
           We will create your organization, its locations and standard units. Add every branch you already operate; you can change them later in Settings.
         </p>
 
-        {pendingInvitations.length > 0 && (
-          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/70 p-4">
-            <p className="text-sm font-bold text-amber-900">
-              You have been invited to {pendingInvitations.join(", ")}
-            </p>
-            <p className="mt-1 text-sm text-amber-900/80">
-              To join as an employee, open the invitation link that was shared with you instead of creating a new
-              workspace. Creating one here makes a separate, empty restaurant that only you can see.
-            </p>
-          </div>
-        )}
-
         <form action={formAction} className="space-y-4" onSubmit={handleSubmit}>
+          <input type="hidden" name="ownerToken" value={ownerToken} readOnly />
           <Field label="Restaurant or group name" required>
             <Input name="organizationName" required placeholder="Example: BIG MO" autoFocus />
           </Field>

@@ -1,3 +1,4 @@
+import { Package, ReceiptText } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { SectionNav } from "@/components/dashboard/section-nav";
 import { SupplierComparison } from "@/components/suppliers/supplier-comparison";
@@ -29,9 +30,27 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
       />
 
       <SectionNav />
+
+      {totalCount > 0 && (
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Suppliers</p>
+            <p className="mt-1 text-2xl font-black tabular-nums">{rows.length}</p>
+          </div>
+          <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+            <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]"><Package size={13} /> Products</p>
+            <p className="mt-1 text-2xl font-black tabular-nums">{rows.reduce((total, row) => total + row.productCount, 0)}</p>
+          </div>
+          <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+            <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]"><ReceiptText size={13} /> Price intelligence</p>
+            <p className="mt-1 text-2xl font-black tabular-nums text-green-900">{comparison.length}</p>
+          </div>
+        </div>
+      )}
+
       <SupplierDirectory rows={rows} currency={tenant.currency} canManage={hasPermission(tenant.role, "manage_suppliers")} isEmptyDirectory={totalCount === 0} />
       {comparison.length > 0 && (
-        <div className="mt-8">
+        <div className="mt-5">
           <SupplierComparison rows={comparison} currency={tenant.currency} />
         </div>
       )}

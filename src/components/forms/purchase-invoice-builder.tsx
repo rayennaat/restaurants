@@ -127,9 +127,9 @@ export function PurchaseInvoiceBuilder({
   };
 
   return (
-    <form onSubmit={handleSubmit(submit)} className="space-y-6">
+    <form onSubmit={handleSubmit(submit)} className="w-full space-y-5">
       {/* ---- header ---- */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(15rem,1.2fr)_minmax(13rem,1fr)_minmax(13rem,1fr)_minmax(11rem,.8fr)]">
         <Field label="Supplier" error={errors.supplierId?.message}>
           <div className="relative">
             <Truck size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
@@ -176,7 +176,7 @@ export function PurchaseInvoiceBuilder({
       </div>
 
       {/* ---- line items ---- */}
-      <div className="overflow-hidden rounded-2xl border bg-white">
+      <div className="overflow-hidden rounded-lg border bg-white">
         <div className="border-b px-5 py-4">
           <h2 className="font-black">Invoice lines</h2>
           <p className="text-sm text-[var(--muted)]">Each line creates one stock movement and updates the ingredient&apos;s latest cost.</p>
@@ -186,7 +186,7 @@ export function PurchaseInvoiceBuilder({
             const item = items?.[index];
             const itemErrors = errors.items?.[index] ?? ({} as Record<string, { message?: string }>);
             return (
-              <div key={field.id} className="grid gap-3 p-4 sm:grid-cols-[1fr_auto_auto_auto_auto] sm:items-end">
+              <div key={field.id} className="grid gap-3 p-4 xl:grid-cols-[minmax(18rem,1.6fr)_minmax(6.5rem,.45fr)_minmax(6.5rem,.45fr)_minmax(8.5rem,.6fr)_minmax(9rem,.55fr)] xl:items-end 2xl:grid-cols-[minmax(22rem,1.8fr)_minmax(7rem,.42fr)_minmax(7rem,.42fr)_minmax(9rem,.55fr)_minmax(10rem,.55fr)]">
                 <Field label="Ingredient" required error={itemErrors.ingredientId?.message}>
                   <Select
                     {...register(`items.${index}.ingredientId`, {
@@ -203,11 +203,11 @@ export function PurchaseInvoiceBuilder({
                 </Field>
 
                 <Field label="Qty" required error={itemErrors.quantity?.message}>
-                  <Input type="number" step="0.001" min="0" className="w-24" {...register(`items.${index}.quantity`)} />
+                  <Input type="number" step="0.001" min="0" className="w-full text-right" {...register(`items.${index}.quantity`)} />
                 </Field>
 
                 <Field label="Unit" required error={itemErrors.unitCode?.message}>
-                  <Select {...register(`items.${index}.unitCode`)} className="w-24">
+                  <Select {...register(`items.${index}.unitCode`)} className="w-full">
                     {lineOptions(index).map(unit => (
                       <option key={unit.code} value={unit.code}>
                         {unit.code}
@@ -217,11 +217,11 @@ export function PurchaseInvoiceBuilder({
                 </Field>
 
                 <Field label={`Cost/${item?.unitCode || "unit"} (${currency})`} required error={itemErrors.unitCost?.message}>
-                  <Input type="number" step={moneyInputStep(currency)} min="0" className="w-28" {...register(`items.${index}.unitCost`)} />
+                  <Input type="number" step={moneyInputStep(currency)} min="0" className="w-full text-right" {...register(`items.${index}.unitCost`)} />
                 </Field>
 
-                <div className="flex items-end gap-2">
-                  <span className="mb-0.5 text-sm tabular-nums font-semibold text-[var(--muted)]">
+                <div className="flex items-end justify-end gap-2">
+                  <span className="mb-0.5 whitespace-nowrap text-right text-sm tabular-nums font-semibold text-[var(--muted)]">
                     = {currency} {((Number(item?.quantity ?? 0) * Number(item?.unitCost ?? 0))).toFixed(currency === "TND" ? 3 : 2)}
                   </span>
                   {fields.length > 1 && (
@@ -261,14 +261,16 @@ export function PurchaseInvoiceBuilder({
         </div>
       </div>
 
-      <Field label="Notes" error={errors.notes?.message} hint="Delivery slip reference, payment terms, anything worth remembering.">
-        <Input {...register("notes")} placeholder="Optional" />
-      </Field>
+      <div className="max-w-3xl">
+        <Field label="Notes" error={errors.notes?.message} hint="Delivery slip reference, payment terms, anything worth remembering.">
+          <Input {...register("notes")} placeholder="Optional" />
+        </Field>
+      </div>
 
       {errors.root && <FormError message={errors.root.message} />}
       {errors.items && typeof errors.items.message === "string" && <FormError message={errors.items.message} />}
 
-      <Button className="w-full" size="lg" disabled={isSubmitting}>
+      <Button className="w-full md:w-auto md:min-w-80" size="lg" disabled={isSubmitting}>
         {isSubmitting ? (
           "Recording invoice…"
         ) : (

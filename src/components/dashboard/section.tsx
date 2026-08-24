@@ -32,10 +32,10 @@ export function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className={cn("mt-10", className)}>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+    <section className={cn("mt-8", className)}>
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
         <div className="min-w-0">
-          <h2 className={cn("text-lg font-black tracking-tight", tone === "alert" && "text-amber-800")}>{title}</h2>
+          <h2 className={cn("text-base font-black tracking-tight", tone === "alert" && "text-amber-800")}>{title}</h2>
           {description && <p className="mt-0.5 text-sm text-[var(--muted)]">{description}</p>}
         </div>
         {action && (

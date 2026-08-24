@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, ChefHat, Coins, PackageSearch, Percent, Receipt, ReceiptText, ShoppingCart, TrendingUp, Trash2, UtensilsCrossed } from "lucide-react";
+import { AlertTriangle, ArrowRight, ChefHat, ClipboardList, Coins, PackagePlus, PackageSearch, Percent, Receipt, ReceiptText, ShoppingCart, TrendingUp, Trash2, UtensilsCrossed, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { AnalyticsFilters } from "@/components/dashboard/analytics-filters";
 import { KpiCard } from "@/components/dashboard/kpi-card";
@@ -90,10 +90,35 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         currentLocationId={location.id}
         from={fromInput}
         to={toInput}
-        className="mb-6"
+        className="mb-4"
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-stretch">
+        <div className={attentionCount > 0 ? "rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-950 shadow-sm" : "rounded-lg border bg-white px-4 py-3 text-sm text-[var(--muted)] shadow-sm"}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p>
+              <b className={attentionCount > 0 ? "text-amber-950" : "text-[var(--foreground)]"}>
+                {attentionCount > 0 ? String(attentionCount) + " inventory item" + (attentionCount === 1 ? "" : "s") + " need attention" : "No urgent stock issues"}
+              </b>
+              <span className="ml-2">
+                {inventory.outOfStock.length} out · {inventory.lowStock.length} low · {location.name}
+              </span>
+            </p>
+            <Link href="/dashboard/inventory" className="inline-flex items-center gap-1 font-semibold text-green-900 hover:underline">
+              Open inventory <ArrowRight size={14} />
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[34rem]">
+          <QuickAction href="/dashboard/purchases?view=new" icon={PackagePlus} label="Receive" />
+          <QuickAction href="/dashboard/sales" icon={Receipt} label="Sale" />
+          <QuickAction href="/dashboard/waste" icon={Trash2} label="Waste" />
+          <QuickAction href="/dashboard/inventory/counts" icon={ClipboardList} label="Count" />
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <KpiCard
           label="Inventory value"
           value={formatMoney(inventory.totalValueMillis, tenant.currency)}
@@ -138,9 +163,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         description={attentionCount > 0 ? `${attentionCount} item${attentionCount === 1 ? "" : "s"} worth a look before anything else` : "Nothing is broken right now"}
         tone={attentionCount > 0 ? "alert" : "default"}
       >
-        <div className="grid gap-6 xl:grid-cols-3">
+        <div className="grid gap-3 xl:grid-cols-3">
           <Card>
-            <CardHeader>
+            <CardHeader className="border-b bg-amber-50/40">
               <h3 className="font-black">Low stock</h3>
               <p className="text-sm text-[var(--muted)]">At or below the minimum you set</p>
             </CardHeader>
@@ -160,7 +185,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               ) : (
                 <>
                   {[...inventory.outOfStock, ...inventory.lowStock].slice(0, 6).map(item => (
-                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border p-3">
+                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
                       <div className="min-w-0">
                         <b className="block truncate text-sm">{item.name}</b>
                         <p className="text-xs text-[var(--muted)]">
@@ -198,7 +223,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               ) : (
                 <>
                   {recentPurchases.map(purchase => (
-                    <Link key={purchase.id} href={`/dashboard/purchases/${purchase.id}`} className="flex items-center justify-between gap-3 rounded-xl border p-3 transition hover:bg-neutral-50">
+                    <Link key={purchase.id} href={`/dashboard/purchases/${purchase.id}`} className="flex items-center justify-between gap-3 rounded-lg border p-3 transition hover:bg-neutral-50">
                       <div className="min-w-0">
                         <b className="block truncate text-sm">{purchase.supplierName ?? "No supplier"}</b>
                         <p className="text-xs text-[var(--muted)]">
@@ -230,7 +255,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 />
               ) : (
                 recentWaste.map(entry => (
-                  <div key={entry.id} className="flex items-center justify-between gap-3 rounded-xl border p-3">
+                  <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
                     <div className="min-w-0">
                       <b className="block truncate text-sm">{entry.ingredientName}</b>
                       <p className="text-xs text-[var(--muted)]">
@@ -251,7 +276,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         title="Analytics"
         description="Where the money sits, where it is going and what it is doing to your margin"
       >
-        <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
+        <div className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
           <Card>
             <CardHeader>
               <h3 className="font-black">Waste cost trend</h3>
@@ -312,7 +337,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </Card>
         </div>
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-2">
+        <div className="mt-6 grid gap-5 xl:grid-cols-2">
           <Card>
             <CardHeader>
               <h3 className="font-black">Top ingredient costs</h3>
@@ -365,7 +390,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 />
               ) : (
                 risingPrices.map(row => (
-                  <div key={`${row.ingredientId}-${row.supplierId ?? "none"}`} className="flex items-center justify-between gap-3 rounded-xl border p-3">
+                  <div key={`${row.ingredientId}-${row.supplierId ?? "none"}`} className="flex items-center justify-between gap-3 rounded-lg border p-3">
                     <div className="min-w-0">
                       <b className="block truncate text-sm">{row.ingredientName}</b>
                       <p className="text-xs text-[var(--muted)]">
@@ -395,7 +420,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             />
           </Card>
         ) : (
-          <div className="grid gap-6 xl:grid-cols-[1fr_1.4fr]">
+          <div className="grid gap-5 xl:grid-cols-[1fr_1.4fr]">
             <Card>
               <CardHeader>
                 <h3 className="font-black">This period</h3>
@@ -480,7 +505,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             />
           </Card>
         ) : (
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div className="grid gap-5 xl:grid-cols-2">
             <Card className="overflow-hidden">
               <CardHeader>
                 <h3 className="font-black">Best margins</h3>
@@ -530,7 +555,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   />
                 ) : (
                   highFoodCost.map(item => (
-                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-red-200/70 bg-red-50/40 p-3">
+                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-red-200/70 bg-red-50/40 p-3">
                       <div className="min-w-0">
                         <b className="block truncate text-sm">{item.name}</b>
                         <p className="text-xs text-[var(--muted)]">
@@ -547,5 +572,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         )}
       </Section>
     </>
+  );
+}
+
+
+function QuickAction({ href, icon: Icon, label }: { href: string; icon: LucideIcon; label: string }) {
+  return (
+    <Link href={href} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border bg-white px-3 text-sm font-semibold shadow-sm transition hover:border-green-700/40 hover:bg-green-50/40">
+      <Icon size={16} className="text-green-800" />
+      {label}
+    </Link>
   );
 }

@@ -39,13 +39,13 @@ export function KpiCard({
 
   return (
     <Card className="relative overflow-hidden">
-      <div className="p-6">
+      <div className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-[var(--muted)]">{label}</p>
             <p
               className={cn(
-                "mt-2 text-3xl font-black",
+                "mt-1.5 text-2xl font-black tabular-nums",
                 emphasis === "success" && "text-green-800",
                 emphasis === "warning" && "text-amber-700",
                 emphasis === "danger" && "text-red-700",
@@ -64,8 +64,8 @@ export function KpiCard({
               <span className="text-xs text-[var(--muted)]">{hint}</span>
             </div>
           </div>
-          <div className="rounded-xl bg-green-50 p-3">
-            <Icon size={24} className="text-green-800" />
+          <div className="rounded-lg bg-green-50 p-2.5">
+            <Icon size={21} className="text-green-800" />
           </div>
         </div>
       </div>

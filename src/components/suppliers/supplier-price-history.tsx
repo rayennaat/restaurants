@@ -30,7 +30,7 @@ export function SupplierPriceHistory({ points, currency }: { points: PriceHistor
 
   return (
     <Card className="overflow-hidden">
-      <CardHeader>
+      <CardHeader className="border-b bg-neutral-50/60">
         <h2 className="flex items-center gap-2 text-lg font-black">
           <History size={18} className="text-green-700" />
           Price history

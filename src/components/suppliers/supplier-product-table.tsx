@@ -57,7 +57,7 @@ export function SupplierProductTable({
 
   return (
     <Card className="overflow-hidden">
-      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+      <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b">
         <div>
           <h2 className="text-lg font-black">Products they sell</h2>
           <p className="text-sm text-[var(--muted)]">Prices update automatically when you receive an invoice from this supplier.</p>
@@ -91,7 +91,7 @@ export function SupplierProductTable({
             </THead>
             <TBody>
               {rows.map(row => (
-                <TR key={row.id}>
+                <TR key={row.id} className={row.lastPriceMillis <= 0 ? "bg-amber-50/50" : undefined}>
                   <TD>
                     <b>{row.ingredientName}</b>
                     <span className="block text-xs text-[var(--muted)]">base unit {row.baseUnitCode}</span>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardList } from "lucide-react";
+import { AlertTriangle, ClipboardList } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { SectionNav } from "@/components/dashboard/section-nav";
 import { NewCountButton } from "@/components/inventory/new-count-button";
@@ -41,6 +41,9 @@ export default async function StockCountsPage() {
   ]);
 
   const canCount = hasPermission(tenant.role, "manage_stock_counts");
+  const awaitingApproval = counts.filter(count => count.status === "submitted");
+  const inProgress = counts.filter(count => count.status === "draft" || count.status === "counting");
+  const completed = counts.filter(count => count.status === "approved");
 
   return (
     <>
@@ -53,13 +56,40 @@ export default async function StockCountsPage() {
 
       <SectionNav />
 
+      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Awaiting approval</p>
+          <p className="mt-1 text-2xl font-black tabular-nums text-amber-700">{awaitingApproval.length}</p>
+        </div>
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">In progress</p>
+          <p className="mt-1 text-2xl font-black tabular-nums text-green-900">{inProgress.length}</p>
+        </div>
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Approved</p>
+          <p className="mt-1 text-2xl font-black tabular-nums">{completed.length}</p>
+        </div>
+      </div>
+
+      {awaitingApproval.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-950">
+          <p className="inline-flex items-center gap-2">
+            <AlertTriangle size={16} />
+            <b>{awaitingApproval.length} submitted count{awaitingApproval.length === 1 ? "" : "s"} awaiting approval</b>
+          </p>
+          <Link href={`/dashboard/inventory/counts/${awaitingApproval[0].id}`} className="font-semibold text-green-900 hover:underline">
+            Review first
+          </Link>
+        </div>
+      )}
+
       {counts.length === 0 ? (
         <Card>
           <EmptyState
             icon={ClipboardList}
             title="No stock counts yet"
             description="Create your first physical inventory count to compare your actual stock with the system."
-            action={undefined}
+            action={canCount ? <NewCountButton locations={location.options} categories={categories} /> : undefined}
           />
           {!canCount && (
             <CardContent className="pt-0 text-center text-sm text-[var(--muted)]">
@@ -83,7 +113,7 @@ export default async function StockCountsPage() {
             </THead>
             <TBody>
               {counts.map(count => (
-                <TR key={count.id}>
+                <TR key={count.id} className={count.status === "submitted" ? "bg-amber-50/60" : count.status === "rejected" ? "bg-red-50/50" : undefined}>
                   <TD>
                     <Link href={`/dashboard/inventory/counts/${count.id}`} className="font-bold text-green-900 hover:underline">
                       {count.reference ?? `Count ${count.id.slice(0, 8)}`}
@@ -93,7 +123,13 @@ export default async function StockCountsPage() {
                   <TD className="text-sm text-[var(--muted)]">{count.createdByName ?? "—"}</TD>
                   <TD className="text-sm text-[var(--muted)]">{count.createdAt.toLocaleDateString()}</TD>
                   <TDNum>
-                    {count.countedCount}/{count.itemCount}
+                    <span className="font-semibold">{count.countedCount}/{count.itemCount}</span>
+                    <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-neutral-100">
+                      <span
+                        className="block h-full bg-green-700"
+                        style={{ width: count.itemCount > 0 ? Math.min((count.countedCount / count.itemCount) * 100, 100) + "%" : "0%" }}
+                      />
+                    </span>
                   </TDNum>
                   <TDNum
                     className={count.netValueMillis < 0 ? "font-semibold text-red-700" : count.netValueMillis > 0 ? "font-semibold text-green-800" : ""}

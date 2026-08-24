@@ -151,7 +151,7 @@ export function CountSheet({
   return (
     <div className="space-y-6">
       {/* ------------------------------------------------------------ summary */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryTile label="Items counted" value={`${summary.countedCount} / ${summary.itemCount}`} hint={`${summary.varianceCount} with a variance`} />
         <SummaryTile label="Total gain" value={formatMoney(summary.positiveValueMillis, currency)} hint="Counted above the ledger" tone="success" />
         <SummaryTile label="Total loss" value={formatMoney(summary.negativeValueMillis, currency)} hint="Counted below the ledger" tone="danger" />
@@ -187,7 +187,7 @@ export function CountSheet({
 
       {/* --------------------------------------------------------- count sheet */}
       <Card className="overflow-hidden">
-        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+        <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b">
           <div>
             <h2 className="text-lg font-black">Count sheet</h2>
             <p className="text-sm text-[var(--muted)]">
@@ -197,7 +197,7 @@ export function CountSheet({
             </p>
           </div>
           {editable && (
-            <span className="inline-flex gap-2">
+            <span className="grid w-full gap-2 sm:flex sm:w-auto">
               <Button variant="secondary" onClick={() => save()} disabled={pending || !dirty}>
                 <Save size={16} /> {pending ? "Saving…" : dirty ? "Save progress" : "Saved"}
               </Button>
@@ -239,7 +239,7 @@ export function CountSheet({
                           step="any"
                           min="0"
                           inputMode="decimal"
-                          className="h-9 w-32 text-right"
+                          className="h-10 w-36 text-right text-base sm:text-sm"
                           value={entries[item.id] ?? ""}
                           placeholder="—"
                           onChange={event => {
@@ -291,7 +291,7 @@ export function CountSheet({
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-xl border bg-neutral-50 p-4 text-sm">
+            <div className="rounded-lg border bg-neutral-50 p-4 text-sm">
               <p className="font-bold">Approving will change inventory</p>
               <p className="mt-1 text-[var(--muted)]">
                 {summary.varianceCount === 0
@@ -299,7 +299,7 @@ export function CountSheet({
                   : `${summary.varianceCount} adjustment${summary.varianceCount === 1 ? "" : "s"} will be written to the stock ledger, for a net ${formatMoney(summary.netValueMillis, currency)}. This cannot be undone — corrections require a new count.`}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid gap-2 sm:flex sm:flex-wrap">
               <Button onClick={() => setApproving(true)} disabled={pending}>
                 <CheckCircle2 size={16} /> Approve count
               </Button>

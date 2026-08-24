@@ -3,11 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { locations, organizationMembers, organizations, units } from "@/db/schema";
+import { locations, organizationMembers, organizations, ownerOnboardingTokens, units } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_UNITS } from "@/lib/units";
 import { slugify } from "@/lib/utils";
 import { locationInput, onboardingInput, organizationSettingsInput, unitInput } from "@/lib/validation";
+import { checkOwnerOnboardingRedeemable, hashOwnerOnboardingToken } from "@/lib/owner-onboarding";
 import { actionError, actionOk, toActionError, type ActionResult } from "@/server/action-result";
 import { recordAudit } from "@/server/audit";
 import { requirePermission, requireTenant } from "@/server/tenant";
@@ -24,6 +25,8 @@ const TIMEZONE_BY_LOCALE: Record<string, string> = { "fr-TN": "Africa/Tunis", "a
 export async function createWorkspace(_prev: unknown, formData: FormData): Promise<ActionResult<{ organizationId: string }>> {
   try {
     const input = onboardingInput.parse(Object.fromEntries(formData));
+    const ownerToken = String(formData.get("ownerToken") ?? "").trim();
+    if (!ownerToken) return actionError("This workspace setup requires a valid owner onboarding link.");
 
     const supabase = await createClient();
     const {
@@ -32,11 +35,24 @@ export async function createWorkspace(_prev: unknown, formData: FormData): Promi
     if (!user) return actionError("Your session expired. Sign in again.");
 
     const db = getDb();
+    const [ownerAuthorization] = await db
+      .select({ id: ownerOnboardingTokens.id, email: ownerOnboardingTokens.email, status: ownerOnboardingTokens.status, expiresAt: ownerOnboardingTokens.expiresAt })
+      .from(ownerOnboardingTokens)
+      .where(eq(ownerOnboardingTokens.tokenHash, hashOwnerOnboardingToken(ownerToken)))
+      .limit(1);
+    const rejection = checkOwnerOnboardingRedeemable(ownerAuthorization, user.email ?? null);
+    if (rejection) return actionError("This owner onboarding link is not valid for your account.");
 
     const existing = await db.select({ organizationId: organizationMembers.organizationId }).from(organizationMembers).where(eq(organizationMembers.userId, user.id)).limit(1);
     if (existing.length) return actionOk({ organizationId: existing[0].organizationId });
 
     const organizationId = await db.transaction(async tx => {
+      const [claimed] = await tx
+        .update(ownerOnboardingTokens)
+        .set({ status: "claimed", claimedAt: new Date(), claimedBy: user.id, updatedAt: new Date() })
+        .where(and(eq(ownerOnboardingTokens.id, ownerAuthorization.id), eq(ownerOnboardingTokens.status, "pending")))
+        .returning({ id: ownerOnboardingTokens.id });
+      if (!claimed) throw new ActionError("This owner onboarding link has already been used.");
       const slug = `${slugify(input.organizationName) || "workspace"}-${crypto.randomUUID().slice(0, 6)}`;
       const [organization] = await tx
         .insert(organizations)

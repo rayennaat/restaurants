@@ -90,7 +90,7 @@ export function IngredientManager({ rows, units, categories, currency, canManage
   if (isEmptyCatalog) {
     return (
       <>
-        <div className="rounded-2xl border bg-white panel-shadow">
+        <div className="rounded-lg border bg-white shadow-sm">
           <EmptyState
             icon={Boxes}
             title="Your ingredient list is empty"
@@ -123,11 +123,11 @@ export function IngredientManager({ rows, units, categories, currency, canManage
       </div>
 
       {rows.length === 0 ? (
-        <div className="rounded-2xl border bg-white panel-shadow">
+        <div className="rounded-lg border bg-white shadow-sm">
           <EmptyState icon={Boxes} title="No ingredients match these filters" description="Try clearing the search box or switching the status filter back to “All statuses”." />
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border bg-white panel-shadow">
+        <div className="overflow-hidden rounded-lg border bg-white shadow-sm">
           <Table className="min-w-[860px]">
             <THead>
               <TR className="hover:bg-transparent">
@@ -178,7 +178,7 @@ export function IngredientManager({ rows, units, categories, currency, canManage
                           {menuFor === row.id && (
                             <>
                               <div className="fixed inset-0 z-10" onClick={() => setMenuFor(null)} />
-                              <div className="absolute right-4 top-12 z-20 w-52 overflow-hidden rounded-xl border bg-white py-1 shadow-xl">
+                              <div className="absolute right-4 top-12 z-20 w-52 overflow-hidden rounded-lg border bg-white py-1 shadow-xl">
                                 <button type="button" onClick={() => { setMenuFor(null); setEditing(row); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-50">
                                   <Pencil size={15} /> Edit
                                 </button>

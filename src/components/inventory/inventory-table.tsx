@@ -30,7 +30,7 @@ function buildColumns(currency: string): ColumnDef<InventoryRow>[] {
       id: "status",
       header: "Status",
       cell: ({ row }) =>
-        row.original.stock <= 0 ? <Badge tone="danger">Out</Badge> : row.original.stock < row.original.minimum ? <Badge tone="warning">Low</Badge> : <Badge tone="success">Healthy</Badge>,
+        row.original.stock <= 0 ? <Badge tone="danger">Out</Badge> : row.original.minimum > 0 && row.original.stock <= row.original.minimum ? <Badge tone="warning">Low</Badge> : <Badge tone="success">Healthy</Badge>,
     },
   ];
 }
@@ -50,11 +50,11 @@ export function InventoryTable({ data, currency }: { data: InventoryRow[]; curre
     <div className="overflow-x-auto">
       <table className="w-full min-w-[680px] text-left text-sm">
         <thead>
-          <tr className="border-b text-xs uppercase tracking-wider text-[var(--muted)]">
+          <tr className="border-b bg-neutral-50/70 text-xs uppercase tracking-wider text-[var(--muted)]">
             {table.getHeaderGroups()[0].headers.map(header => {
               const sorted = header.column.getIsSorted();
               return (
-                <th key={header.id} className="px-5 py-4 font-semibold">
+                <th key={header.id} className="px-3 py-2.5 font-semibold sm:px-4">
                   <button type="button" onClick={header.column.getToggleSortingHandler()} className="inline-flex items-center gap-1.5 transition hover:text-[var(--foreground)]">
                     {flexRender(header.column.columnDef.header, header.getContext())}
                     {sorted === "asc" ? <ArrowUp size={13} /> : sorted === "desc" ? <ArrowDown size={13} /> : <ChevronsUpDown size={13} className="opacity-40" />}
@@ -65,15 +65,24 @@ export function InventoryTable({ data, currency }: { data: InventoryRow[]; curre
           </tr>
         </thead>
         <tbody>
-          {table.getRowModel().rows.map(row => (
-            <tr key={row.id} className="border-b last:border-0 hover:bg-neutral-50">
-              {row.getVisibleCells().map(cell => (
-                <td key={cell.id} className="px-5 py-4">
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {table.getRowModel().rows.map(row => {
+            const isOut = row.original.stock <= 0;
+            const isLow = !isOut && row.original.minimum > 0 && row.original.stock <= row.original.minimum;
+            const rowClassName = isOut
+              ? "border-b bg-red-50/50 last:border-0 hover:bg-red-50"
+              : isLow
+                ? "border-b bg-amber-50/50 last:border-0 hover:bg-amber-50"
+                : "border-b last:border-0 hover:bg-neutral-50";
+            return (
+              <tr key={row.id} className={rowClassName}>
+                {row.getVisibleCells().map(cell => (
+                  <td key={cell.id} className="px-3 py-2.5 sm:px-4">
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

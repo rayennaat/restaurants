@@ -54,7 +54,7 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
       />
 
       {!supplier.isActive && (
-        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
           This supplier is archived. It stays out of pickers but its history is preserved.
         </div>
       )}

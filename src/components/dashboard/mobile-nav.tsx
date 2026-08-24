@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Menu, Store, X } from "lucide-react";
+import { LogOut, Menu, X } from "lucide-react";
 import { NavTree } from "@/components/dashboard/nav-tree";
 
 /**
@@ -72,16 +73,16 @@ export function MobileNav({ organizationName }: { organizationName: string }) {
           onClick={() => setOpen(true)}
           aria-label="Open menu"
           aria-expanded={open}
-          className="-ml-1 grid size-10 place-items-center rounded-xl border text-neutral-700 transition hover:bg-neutral-50"
+          className="-ml-1 grid size-10 place-items-center rounded-lg border text-neutral-700 transition hover:bg-neutral-50"
         >
           <Menu size={20} />
         </button>
         <Link href="/dashboard" className="flex min-w-0 items-center gap-2">
-          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-green-800 text-white">
-            <Store size={17} />
+          <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-white ring-1 ring-green-900/10">
+            <Image src="/logos/logo2.png" alt="" width={1254} height={1254} className="size-full object-cover" />
           </span>
           <span className="min-w-0">
-            <b className="block truncate text-sm leading-tight">PlatePilot</b>
+            <b className="block truncate text-sm leading-tight">Yield</b>
             <small className="block truncate text-xs text-[var(--muted)]">{organizationName}</small>
           </span>
         </Link>
@@ -101,11 +102,11 @@ export function MobileNav({ organizationName }: { organizationName: string }) {
           >
             <div className="flex items-center justify-between gap-2 border-b p-3">
               <span className="flex min-w-0 items-center gap-2.5">
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-green-800 text-white">
-                  <Store size={19} />
+                <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-white ring-1 ring-green-900/10">
+                  <Image src="/logos/logo2.png" alt="" width={1254} height={1254} className="size-full object-cover" />
                 </span>
                 <span className="min-w-0">
-                  <b className="block truncate text-sm leading-tight">PlatePilot</b>
+                  <b className="block truncate text-sm leading-tight">Yield</b>
                   <small className="block truncate text-xs text-[var(--muted)]">{organizationName}</small>
                 </span>
               </span>
@@ -113,7 +114,7 @@ export function MobileNav({ organizationName }: { organizationName: string }) {
                 type="button"
                 onClick={close}
                 aria-label="Close menu"
-                className="grid size-9 shrink-0 place-items-center rounded-xl text-[var(--muted)] transition hover:bg-neutral-100"
+                className="grid size-9 shrink-0 place-items-center rounded-lg text-[var(--muted)] transition hover:bg-neutral-100"
               >
                 <X size={18} />
               </button>
@@ -124,7 +125,7 @@ export function MobileNav({ organizationName }: { organizationName: string }) {
             </div>
 
             <form action="/auth/signout" method="post" className="border-t p-3">
-              <button className="flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition hover:bg-neutral-50">
+              <button className="flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition hover:bg-neutral-50">
                 <LogOut size={16} aria-hidden />
                 Sign out
               </button>

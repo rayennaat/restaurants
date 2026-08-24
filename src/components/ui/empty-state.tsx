@@ -22,22 +22,22 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("grid place-items-center px-6 py-14 text-center", className)}>
-      <span className="grid size-14 place-items-center rounded-2xl bg-green-50 text-green-800">
-        <Icon size={26} />
+    <div className={cn("grid place-items-center px-5 py-10 text-center", className)}>
+      <span className="grid size-12 place-items-center rounded-lg bg-green-50 text-green-800">
+        <Icon size={23} />
       </span>
-      <h3 className="mt-4 text-lg font-black">{title}</h3>
-      <p className="mt-2 max-w-md text-sm text-[var(--muted)]">{description}</p>
-      <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+      <h3 className="mt-3 text-base font-black">{title}</h3>
+      <p className="mt-1.5 max-w-md text-sm text-[var(--muted)]">{description}</p>
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
         {action && typeof action === "object" && "href" in action ? (
-          <Link href={action.href} className="inline-flex h-11 items-center rounded-xl bg-[var(--primary)] px-4 font-semibold text-white transition hover:bg-green-800">
+          <Link href={action.href} className="inline-flex h-10 items-center rounded-lg bg-[var(--primary)] px-3.5 text-sm font-semibold text-white transition hover:bg-green-800">
             {action.label}
           </Link>
         ) : (
           action
         )}
         {secondaryAction && (
-          <Link href={secondaryAction.href} className="inline-flex h-11 items-center rounded-xl border bg-white px-4 font-semibold transition hover:bg-neutral-50">
+          <Link href={secondaryAction.href} className="inline-flex h-10 items-center rounded-lg border bg-white px-3.5 text-sm font-semibold transition hover:bg-neutral-50">
             {secondaryAction.label}
           </Link>
         )}

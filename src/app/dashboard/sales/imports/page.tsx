@@ -37,7 +37,7 @@ export default async function SalesImportHistoryPage() {
           canImport ? (
             <Link
               href="/dashboard/sales/import"
-              className="inline-flex h-11 items-center gap-2 rounded-xl bg-[var(--primary)] px-4 font-semibold text-white transition hover:bg-green-800"
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-[var(--primary)] px-4 font-semibold text-white transition hover:bg-green-800"
             >
               <Upload size={16} /> Import sales
             </Link>
@@ -46,6 +46,23 @@ export default async function SalesImportHistoryPage() {
       />
 
       <SectionNav />
+
+      {imports.length > 0 && (
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Runs</p>
+            <p className="mt-1 text-2xl font-black tabular-nums">{imports.length}</p>
+          </div>
+          <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Imported rows</p>
+            <p className="mt-1 text-2xl font-black tabular-nums text-green-900">{imports.reduce((total, entry) => total + entry.importedRows, 0).toLocaleString()}</p>
+          </div>
+          <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Failed rows</p>
+            <p className="mt-1 text-2xl font-black tabular-nums text-red-700">{imports.reduce((total, entry) => total + entry.failedRows, 0).toLocaleString()}</p>
+          </div>
+        </div>
+      )}
 
       {imports.length === 0 ? (
         <Card>
@@ -74,7 +91,7 @@ export default async function SalesImportHistoryPage() {
             </THead>
             <TBody>
               {imports.map(entry => (
-                <TR key={entry.id}>
+                <TR key={entry.id} className={entry.failedRows > 0 || entry.status !== "completed" ? "bg-red-50/40" : entry.skippedRows > 0 ? "bg-amber-50/40" : undefined}>
                   <TD>
                     <Link href={`/dashboard/sales/imports/${entry.id}`} className="font-bold text-green-900 hover:underline">
                       {entry.filename ?? `Import ${entry.id.slice(0, 8)}`}

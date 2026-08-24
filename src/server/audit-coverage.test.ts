@@ -67,6 +67,18 @@ const EXEMPT: Record<string, string> = {
   // every preview would fill the trail with abandoned attempts while adding
   // nothing: nothing changed, so there is nothing to hold anyone to.
   "sales-import.ts:previewSalesImport": "Read-only preview; the commit that writes is audited transactionally.",
+
+  // These operations happen before a Supabase Auth user has a workspace or
+  // membership, so there is no organization audit trail to append to.
+  "auth.ts:resolvePostAuthRoute": "Read-only routing decision; it writes no application state.",
+  "auth.ts:registerWithAuthorization": "Pre-workspace Auth account creation is authorized by an employee or owner token.",
+  "auth.ts:requestPasswordReset": "Supabase Auth recovery is unauthenticated and has no workspace audit context.",
+
+  // Platform administration has no tenant context. These actions write to the
+  // separate platform_audit_logs table instead of the tenant audit trail.
+  "platform-admin.ts:issuePlatformOwnerInvitation": "Writes a platform audit event for owner onboarding issuance.",
+  "platform-admin.ts:revokePlatformOwnerInvitation": "Writes a platform audit event for owner onboarding revocation.",
+  "platform-admin.ts:updatePlatformOrganization": "Writes platform audit events for plan and status changes.",
 };
 
 describe("every server action records an audit entry", () => {

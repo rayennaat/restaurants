@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Plus, Truck } from "lucide-react";
+import { ArrowRight, Clock, PackageCheck, Plus, Truck } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { SectionNav } from "@/components/dashboard/section-nav";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +48,8 @@ export default async function TransfersPage() {
     : transfers.filter(row => mine.has(row.destinationLocationId));
 
   const awaiting = transfers.filter(row => row.status === "sent").length;
+  const drafts = transfers.filter(row => row.status === "draft").length;
+  const completed = transfers.filter(row => row.status === "received").length;
 
   return (
     <>
@@ -59,7 +61,7 @@ export default async function TransfersPage() {
           canMove ? (
             <Link
               href="/dashboard/transfers/new"
-              className="inline-flex h-11 items-center gap-2 rounded-xl bg-[var(--primary)] px-4 font-semibold text-white transition hover:bg-green-800"
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-[var(--primary)] px-4 font-semibold text-white transition hover:bg-green-800"
             >
               <Plus size={16} /> New transfer
             </Link>
@@ -68,6 +70,23 @@ export default async function TransfersPage() {
       />
 
       <SectionNav />
+
+      {transfers.length > 0 && (
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+            <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]"><Clock size={13} /> In transit</p>
+            <p className="mt-1 text-2xl font-black tabular-nums text-amber-700">{awaiting}</p>
+          </div>
+          <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Drafts</p>
+            <p className="mt-1 text-2xl font-black tabular-nums">{drafts}</p>
+          </div>
+          <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+            <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]"><PackageCheck size={13} /> Received</p>
+            <p className="mt-1 text-2xl font-black tabular-nums text-green-900">{completed}</p>
+          </div>
+        </div>
+      )}
 
       {transfers.length === 0 ? (
         <Card>
@@ -79,9 +98,9 @@ export default async function TransfersPage() {
           />
         </Card>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {awaiting > 0 && (
-            <p className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
+            <p className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
               <b>
                 {awaiting} transfer{awaiting === 1 ? "" : "s"} in transit.
               </b>{" "}
@@ -133,9 +152,12 @@ function TransferTable({
 }) {
   return (
     <Card className="overflow-hidden">
-      <CardHeader>
-        <h2 className="text-lg font-black">{title}</h2>
+      <CardHeader className="flex flex-wrap items-start justify-between gap-3 border-b">
+        <div>
+          <h2 className="text-lg font-black">{title}</h2>
         <p className="text-sm text-[var(--muted)]">{description}</p>
+        </div>
+        <span className="text-sm font-semibold tabular-nums text-[var(--muted)]">{rows.length} total</span>
       </CardHeader>
 
       {rows.length === 0 ? (
@@ -154,7 +176,7 @@ function TransferTable({
           </THead>
           <TBody>
             {rows.map(row => (
-              <TR key={row.id}>
+              <TR key={row.id} className={row.status === "sent" ? "bg-amber-50/50" : row.status === "cancelled" ? "bg-red-50/40" : undefined}>
                 <TD>
                   <Link href={`/dashboard/transfers/${row.id}`} className="font-bold text-green-900 hover:underline">
                     {row.reference ?? `Transfer ${row.id.slice(0, 8)}`}

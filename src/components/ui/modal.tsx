@@ -82,7 +82,7 @@ export function Modal({
         if (event.target === ref.current) onClose();
       }}
       className={cn(
-        "m-auto w-[calc(100vw-1.5rem)] rounded-3xl border bg-white p-0 text-[var(--foreground)] backdrop:bg-black/40 backdrop:backdrop-blur-sm",
+        "m-auto w-[calc(100vw-1.5rem)] rounded-lg border bg-white p-0 text-[var(--foreground)] backdrop:bg-black/40 backdrop:backdrop-blur-sm",
         size === "md" && "max-w-lg",
         size === "lg" && "max-w-2xl",
         size === "xl" && "max-w-4xl",
@@ -95,7 +95,7 @@ export function Modal({
               <h2 className="text-xl font-black">{title}</h2>
               {description && <p className="mt-1 text-sm text-[var(--muted)]">{description}</p>}
             </div>
-            <button type="button" onClick={onClose} aria-label="Close" className="-mr-2 rounded-xl p-2 text-[var(--muted)] transition hover:bg-neutral-100">
+            <button type="button" onClick={onClose} aria-label="Close" className="-mr-2 rounded-lg p-2 text-[var(--muted)] transition hover:bg-neutral-100">
               <X size={18} />
             </button>
           </header>

@@ -96,7 +96,7 @@ export function CompositionBuilder<TFieldValues extends FieldValues>({
       </div>
 
       {fields.length === 0 && (
-        <p className="rounded-xl border border-dashed p-4 text-center text-sm text-[var(--muted)]">
+        <p className="rounded-lg border border-dashed p-4 text-center text-sm text-[var(--muted)]">
           {emptyHint ?? "Add the ingredients and preparations that make up this item."}
         </p>
       )}
@@ -112,7 +112,7 @@ export function CompositionBuilder<TFieldValues extends FieldValues>({
           const unitOptions = yieldUnit ? compatibleUnits(units, yieldUnit) : [];
 
           return (
-            <div key={field.id} className="grid grid-cols-[2fr_1fr_1fr_auto] items-start gap-2 rounded-xl border border-amber-200/70 bg-amber-50/40 p-2">
+            <div key={field.id} className="grid grid-cols-[2fr_1fr_1fr_auto] items-start gap-2 rounded-lg border border-amber-200/70 bg-amber-50/40 p-2">
               <Field error={lineErrors?.componentRecipeId?.message}>
                 <Select
                   {...register(path(index, "componentRecipeId"), {
@@ -157,7 +157,7 @@ export function CompositionBuilder<TFieldValues extends FieldValues>({
         const unitOptions = ingredient ? compatibleUnits(units, ingredient.baseUnitCode) : units;
 
         return (
-          <div key={field.id} className="grid grid-cols-[2fr_1fr_1fr_auto] items-start gap-2 rounded-xl border border-transparent p-2">
+          <div key={field.id} className="grid grid-cols-[2fr_1fr_1fr_auto] items-start gap-2 rounded-lg border border-transparent p-2">
             <Field error={lineErrors?.ingredientId?.message}>
               <Select
                 {...register(path(index, "ingredientId"), {

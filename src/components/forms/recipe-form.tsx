@@ -109,7 +109,7 @@ export function RecipeForm({
         </Field>
       </div>
 
-      <p className="flex gap-2.5 rounded-xl border bg-neutral-50/60 p-3.5 text-sm text-[var(--muted)]">
+      <p className="flex gap-2.5 rounded-lg border bg-neutral-50/60 p-3.5 text-sm text-[var(--muted)]">
         <Soup size={16} className="mt-0.5 shrink-0 text-green-700" />
         <span>
           A preparation is made in batches and used inside your dishes — mayonnaise, stock, dough. Measure the yield in a real unit (kg, L) so a dish can consume part of a

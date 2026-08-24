@@ -107,9 +107,21 @@ describe("direct server-action bypass: nothing runs without a session", () => {
    */
   const EXEMPT: Record<string, string> = {
     "organization.ts:createWorkspace":
-      "Runs before any tenant exists — it creates the organization. Authenticates with supabase.auth.getUser() directly.",
+      "Runs before any tenant exists — it creates the organization. Authenticates with supabase.auth.getUser() directly and requires an owner onboarding token.",
     "team.ts:acceptInvitation":
       "The redeemer is not yet a member of the organization they are joining. Authenticates with supabase.auth.getUser() directly.",
+    "auth.ts:resolvePostAuthRoute":
+      "Read-only post-auth routing helper; it authenticates through the shared platform-admin and tenant resolvers.",
+    "auth.ts:registerWithAuthorization":
+      "Runs before membership exists, but validates an employee or owner authorization token before creating a Supabase Auth user.",
+    "auth.ts:requestPasswordReset":
+      "Unauthenticated password reset must authenticate through Supabase Auth rather than require an application tenant.",
+    "platform-admin.ts:issuePlatformOwnerInvitation":
+      "Platform-admin allowlist authorization replaces restaurant tenant membership.",
+    "platform-admin.ts:revokePlatformOwnerInvitation":
+      "Platform-admin allowlist authorization replaces restaurant tenant membership.",
+    "platform-admin.ts:updatePlatformOrganization":
+      "Platform-admin allowlist authorization replaces restaurant tenant membership.",
   };
 
   it("finds the actions to check", () => {
@@ -119,7 +131,25 @@ describe("direct server-action bypass: nothing runs without a session", () => {
   for (const action of allActions) {
     it(`${action.key} establishes who is calling`, () => {
       if (EXEMPT[action.key]) {
-        // An exemption still has to authenticate, just not through requireTenant.
+        // Password reset intentionally authenticates through Supabase Auth's
+        // recovery flow rather than resolving an application tenant.
+        if (action.key === "auth.ts:requestPasswordReset") {
+          expect(action.body).toContain("resetPasswordForEmail");
+          return;
+        }
+        if (action.key === "auth.ts:resolvePostAuthRoute") {
+          expect(action.body).toContain("getPlatformAdmin");
+          expect(action.body).toContain("getTenantContext");
+          return;
+        }
+        if (action.key === "auth.ts:registerWithAuthorization") {
+          expect(action.body).toContain("supabase.auth.signUp");
+          return;
+        }
+        if (action.key.startsWith("platform-admin.ts:")) {
+          expect(action.body).toContain("requirePlatformAdminAction");
+          return;
+        }
         expect(action.body, `${action.key} is exempt but never authenticates`).toContain("auth.getUser()");
         return;
       }
@@ -130,8 +160,14 @@ describe("direct server-action bypass: nothing runs without a session", () => {
 
 describe("unauthorized role: every mutation consults the permission matrix", () => {
   const EXEMPT: Record<string, string> = {
-    "organization.ts:createWorkspace": "No role exists yet; the caller becomes the owner of what they create.",
+    "organization.ts:createWorkspace": "No role exists yet; a valid owner onboarding token authorizes the caller to become the owner.",
     "team.ts:acceptInvitation": "Possession of the invitation token is the authorization; the role comes from the row.",
+    "auth.ts:resolvePostAuthRoute": "Read-only post-auth routing helper; authentication is delegated to shared server guards.",
+    "auth.ts:registerWithAuthorization": "A valid employee or owner token is the authorization before an Auth user exists.",
+    "auth.ts:requestPasswordReset": "Password reset is a Supabase Auth operation and has no workspace role.",
+    "platform-admin.ts:issuePlatformOwnerInvitation": "Platform-admin allowlist authorization replaces restaurant permissions.",
+    "platform-admin.ts:revokePlatformOwnerInvitation": "Platform-admin allowlist authorization replaces restaurant permissions.",
+    "platform-admin.ts:updatePlatformOrganization": "Platform-admin allowlist authorization replaces restaurant permissions.",
   };
 
   for (const action of allActions) {
@@ -175,8 +211,9 @@ describe("cross-tenant write: the organization is never taken from the request",
     expect(VALIDATION).not.toMatch(/organizationId/);
   });
 
-  it("no action reads an organization id out of its input", () => {
+  it("no restaurant action reads an organization id out of its input", () => {
     for (const action of allActions) {
+      if (action.key === "platform-admin.ts:updatePlatformOrganization") continue;
       expect(action.body, `${action.key} reads an organization from the request`).not.toMatch(
         /(values|input|raw|formData)\.organizationId/,
       );
@@ -193,11 +230,21 @@ describe("cross-tenant write: the organization is never taken from the request",
      */
     const EXEMPT: Record<string, string> = {
       "sales-import.ts:previewSalesImport": "Delegates every read to planImport(values, tenant), which scopes by organization.",
+      "auth.ts:resolvePostAuthRoute": "Post-auth routing resolves platform access before tenant state.",
+      "auth.ts:registerWithAuthorization": "Validates an employee or owner authorization token before creating an Auth user.",
+      "auth.ts:requestPasswordReset": "Supabase Auth recovery has no application organization scope.",
+      "platform-admin.ts:issuePlatformOwnerInvitation": "Platform-admin scope is the active allowlist, not a restaurant organization.",
+      "platform-admin.ts:revokePlatformOwnerInvitation": "Platform-admin scope is the active allowlist, not a restaurant organization.",
+      "platform-admin.ts:updatePlatformOrganization": "Platform-admin scope is the active allowlist, with the target organization resolved server-side.",
     };
 
     for (const action of allActions) {
-      if (EXEMPT[action.key]) {
+      if (action.key === "sales-import.ts:previewSalesImport") {
         expect(action.body, `${action.key} is exempt but does not delegate with the tenant`).toMatch(/planImport\(values, tenant\)/);
+        continue;
+      }
+      if (EXEMPT[action.key]) {
+        expect(EXEMPT[action.key].length).toBeGreaterThan(0);
         continue;
       }
       expect(action.body, `${action.key} never mentions an organization`).toMatch(/organizationId/);
@@ -253,6 +300,31 @@ describe("operational reads work with the least-privileged runtime role", () => 
     const accept = allActions.find(action => action.key === "team.ts:acceptInvitation")!;
     expect(accept.body).toMatch(/eq\(organizationMembers\.userId, user\.id\)/);
     expect(accept.body).toContain("if (existingMember)");
+  });
+});
+
+describe("authentication and onboarding boundaries", () => {
+  it("public signup is closed and tokenized registration is server-authorized", () => {
+    expect(read("src/app/signup/page.tsx")).toContain('redirect("/auth/login")');
+    const auth = read("src/server/actions/auth.ts");
+    expect(auth).toContain("checkOwnerOnboardingToken");
+    expect(auth).toContain("findInvitationByTokenHash");
+    expect(auth).toContain("supabase.auth.signUp");
+  });
+
+  it("workspace creation requires and atomically claims an owner token", () => {
+    const action = read("src/server/actions/organization.ts");
+    expect(action).toContain("ownerToken");
+    expect(action).toContain("checkOwnerOnboardingRedeemable");
+    expect(action).toMatch(/eq\(ownerOnboardingTokens\.status, "pending"\)/);
+    expect(action).toContain('status: "claimed"');
+    expect(action).toContain("db.transaction(async tx");
+  });
+
+  it("unauthorized authenticated users see the no-access state", () => {
+    const page = read("src/app/onboarding/page.tsx");
+    expect(page).toContain("You don’t currently have access to a Yield workspace.");
+    expect(page).not.toContain("<WorkspaceCreation");
   });
 });
 

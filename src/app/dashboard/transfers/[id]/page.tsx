@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, PackageCheck } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { CancelTransferButton, ReceiveTransferButton, SendTransferButton } from "@/components/transfers/transfer-actions";
 import { Badge } from "@/components/ui/badge";
@@ -71,30 +71,45 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
         action={<Badge tone={TRANSFER_STATUS_TONES[transfer.status]}>{TRANSFER_STATUS_LABELS[transfer.status]}</Badge>}
       />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        <div className="space-y-6">
+      <div className="mb-5 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Items</p>
+          <p className="mt-1 text-2xl font-black tabular-nums">{transfer.items.length}</p>
+        </div>
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Value</p>
+          <p className="mt-1 text-2xl font-black tabular-nums text-green-900">{formatMoney(transfer.totalValueMillis, tenant.currency)}</p>
+        </div>
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]"><PackageCheck size={13} /> Status</p>
+          <p className="mt-1 text-sm font-bold">{TRANSFER_STATUS_LABELS[transfer.status]}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-5">
           {transfer.status === "sent" && (
-            <p className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
+            <p className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
               <b>In transit.</b> This stock has been deducted from {transfer.sourceLocationName} and is not yet counted at{" "}
               {transfer.destinationLocationName}. It joins that location&apos;s inventory when someone there confirms receipt.
             </p>
           )}
 
           {transfer.status === "cancelled" && (
-            <p className="rounded-xl border border-red-200 bg-red-50/60 px-4 py-3 text-sm text-red-900">
+            <p className="rounded-lg border border-red-200 bg-red-50/60 px-4 py-3 text-sm text-red-900">
               <b>Cancelled.</b> {transfer.cancelReason ?? "No reason recorded."}
             </p>
           )}
 
           {transfer.status === "draft" && shortLines.length > 0 && (
-            <p className="rounded-xl border border-red-200 bg-red-50/60 px-4 py-3 text-sm text-red-900">
+            <p className="rounded-lg border border-red-200 bg-red-50/60 px-4 py-3 text-sm text-red-900">
               <b>Not enough stock.</b> {shortLines.length} line{shortLines.length === 1 ? "" : "s"} ask for more than{" "}
               {transfer.sourceLocationName} currently holds. Sending will be refused until the quantities fit.
             </p>
           )}
 
           <Card className="overflow-hidden">
-            <CardHeader>
+            <CardHeader className="border-b">
               <h2 className="text-lg font-black">What is moving</h2>
               <p className="text-sm text-[var(--muted)]">
                 Quantities are recorded in each ingredient&apos;s base unit, converted from whatever was entered.
@@ -152,9 +167,9 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
         </div>
 
         {/* ------------------------------------------------------- side panel */}
-        <div className="space-y-6">
+        <div className="space-y-5">
           <Card>
-            <CardHeader>
+            <CardHeader className="border-b bg-neutral-50/60">
               <h2 className="text-base font-black">Route</h2>
             </CardHeader>
             <CardContent className="pt-0">

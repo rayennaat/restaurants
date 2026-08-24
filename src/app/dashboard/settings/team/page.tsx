@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Mail, MapPin, Users } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { TeamManager } from "@/components/team/team-manager";
 import { listLocationOptions } from "@/server/queries/locations";
@@ -36,6 +36,21 @@ export default async function TeamPage() {
       <Link href="/dashboard/settings" className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--muted)] hover:text-neutral-900">
         <ArrowLeft size={15} /> Back to settings
       </Link>
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]"><Users size={13} /> Members</p>
+          <p className="mt-1 text-2xl font-black tabular-nums">{members.length}</p>
+        </div>
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]"><Mail size={13} /> Pending invites</p>
+          <p className="mt-1 text-2xl font-black tabular-nums text-amber-700">{invitations.length}</p>
+        </div>
+        <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
+          <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]"><MapPin size={13} /> Locations</p>
+          <p className="mt-1 text-2xl font-black tabular-nums text-green-900">{locations.length}</p>
+        </div>
+      </div>
 
       <TeamManager
         members={members}

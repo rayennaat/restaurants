@@ -18,12 +18,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const tenant = await getTenantContext();
   if (!tenant) redirect("/auth/login");
   if ("needsOnboarding" in tenant) redirect("/onboarding");
+  if (tenant.status === "suspended" || tenant.status === "cancelled") redirect("/workspace-unavailable");
 
   return (
     <div className="lg:flex lg:min-h-screen">
       <Sidebar organizationName={tenant.organizationName} />
       <MobileNav organizationName={tenant.organizationName} />
-      <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8 xl:p-10">{children}</main>
+      <main className="min-w-0 flex-1 p-4 sm:p-5 lg:p-8 xl:p-10">{children}</main>
     </div>
   );
 }

@@ -57,7 +57,7 @@ function InviteLinkPanel({ token, email, onDone }: { token: string; email: strin
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-green-200 bg-green-50/60 p-4">
+      <div className="rounded-lg border border-green-200 bg-green-50/60 p-4">
         <p className="text-sm font-bold text-green-900">Invitation ready for {email}</p>
         <p className="mt-1 text-sm text-green-900/80">
           Send them this link. It works once, expires in 7 days, and only opens for this email address.
@@ -159,9 +159,9 @@ export function TeamManager({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <Card className="overflow-hidden">
-        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+        <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b">
           <div>
             <h2 className="text-lg font-black">Team</h2>
             <p className="text-sm text-[var(--muted)]">
@@ -210,7 +210,7 @@ export function TeamManager({
                         value={member.role}
                         disabled={pending}
                         onChange={event => applyRole(member, event.currentTarget.value as MemberRole)}
-                        className="h-9 w-40"
+                        className="h-9 w-full min-w-36 sm:w-40"
                       >
                         {(canTransferOwnership ? (["owner", "manager", "inventory", "kitchen", "accountant"] as const) : (["manager", "inventory", "kitchen", "accountant"] as const)).map(role => (
                           <option key={role} value={role}>
@@ -238,7 +238,7 @@ export function TeamManager({
                             else toast.success("Default location updated.");
                           })
                         }
-                        className="h-9 w-44"
+                        className="h-9 w-full min-w-40 sm:w-44"
                       >
                         <option value="">All / unassigned</option>
                         {locations.map(location => (
@@ -275,7 +275,7 @@ export function TeamManager({
       {/* ------------------------------------------------ pending invitations */}
       {canManageTeam && (
         <Card className="overflow-hidden">
-          <CardHeader>
+          <CardHeader className="border-b">
             <h2 className="text-lg font-black">Pending invitations</h2>
             <p className="text-sm text-[var(--muted)]">People invited who have not joined yet</p>
           </CardHeader>
@@ -425,7 +425,7 @@ export function TeamManager({
               </p>
             ) : (
               <div className="space-y-3">
-                <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-900">
+                <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-900">
                   <ShieldAlert size={18} className="mt-0.5 shrink-0" />
                   <span>
                     {confirming.member.role === "owner" ? (

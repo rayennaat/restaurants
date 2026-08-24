@@ -110,6 +110,19 @@ grant execute on function public.can_manage_purchasing(uuid, uuid) to authentica
 grant usage on schema public to authenticated;
 
 revoke all on all tables in schema public from anon, authenticated;
+-- These tables are server-only. The runtime role is granted access by the
+-- migration, while browser roles remain denied.
+revoke all on table public.owner_onboarding_tokens, public.user_profiles, public.platform_admins, public.platform_audit_logs from anon, authenticated;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'platepilot_runtime') THEN
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.owner_onboarding_tokens TO platepilot_runtime;
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.user_profiles TO platepilot_runtime;
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.platform_admins TO platepilot_runtime;
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.platform_audit_logs TO platepilot_runtime;
+    GRANT USAGE, SELECT ON SEQUENCE public.platform_audit_logs_id_seq TO platepilot_runtime;
+  END IF;
+END $$;
 revoke all on all sequences in schema public from anon, authenticated;
 
 -- Future tables must not silently re-acquire the grant. Supabase's project
@@ -145,6 +158,25 @@ alter table public.sales_imports            enable row level security;
 alter table public.stock_transfers          enable row level security;
 alter table public.stock_transfer_items     enable row level security;
 alter table public.audit_logs               enable row level security;
+alter table public.owner_onboarding_tokens  enable row level security;
+alter table public.user_profiles            enable row level security;
+alter table public.platform_admins          enable row level security;
+alter table public.platform_audit_logs      enable row level security;
+
+-- Platform tables are deliberately unreachable through the Data API. These
+-- policies make that fail-closed intent explicit even if a future grant drifts.
+drop policy if exists "no browser access to owner onboarding tokens" on public.owner_onboarding_tokens;
+create policy "no browser access to owner onboarding tokens" on public.owner_onboarding_tokens
+  for all to anon, authenticated using (false) with check (false);
+drop policy if exists "no browser access to user profiles" on public.user_profiles;
+create policy "no browser access to user profiles" on public.user_profiles
+  for all to anon, authenticated using (false) with check (false);
+drop policy if exists "no browser access to platform admins" on public.platform_admins;
+create policy "no browser access to platform admins" on public.platform_admins
+  for all to anon, authenticated using (false) with check (false);
+drop policy if exists "no browser access to platform audit logs" on public.platform_audit_logs;
+create policy "no browser access to platform audit logs" on public.platform_audit_logs
+  for all to anon, authenticated using (false) with check (false);
 
 -- ------------------------------------------------------------ root policies
 

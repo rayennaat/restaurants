@@ -53,7 +53,7 @@ export function AnalyticsFilters({
   const isCustom = currentPreset === "custom";
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-3 panel-shadow", pending && "opacity-70", className)}>
+    <div className={cn("flex flex-wrap items-center gap-2.5 rounded-lg border bg-white px-3 py-2 shadow-sm", pending && "opacity-70", className)}>
       <div className="flex items-center gap-2">
         <CalendarRange size={17} className="text-[var(--muted)]" />
         <Select
@@ -65,7 +65,7 @@ export function AnalyticsFilters({
             // switch shows data rather than an empty window.
             apply(preset === "custom" ? { range: preset, from, to } : { range: preset === DEFAULT_PRESET ? "" : preset, from: "", to: "" });
           }}
-          className="h-11 w-auto min-w-40"
+          className="h-10 w-auto min-w-40"
         >
           {DATE_RANGE_PRESETS.map(preset => (
             <option key={preset} value={preset}>
@@ -77,9 +77,9 @@ export function AnalyticsFilters({
 
       {isCustom && (
         <div className="flex items-center gap-2">
-          <Input type="date" aria-label="From date" value={from} max={to} onChange={event => apply({ range: "custom", from: event.target.value })} className="h-11 w-auto" />
+          <Input type="date" aria-label="From date" value={from} max={to} onChange={event => apply({ range: "custom", from: event.target.value })} className="h-10 w-auto" />
           <span className="text-sm text-[var(--muted)]">→</span>
-          <Input type="date" aria-label="To date" value={to} min={from} onChange={event => apply({ range: "custom", to: event.target.value })} className="h-11 w-auto" />
+          <Input type="date" aria-label="To date" value={to} min={from} onChange={event => apply({ range: "custom", to: event.target.value })} className="h-10 w-auto" />
         </div>
       )}
 
@@ -90,7 +90,7 @@ export function AnalyticsFilters({
             aria-label="Location"
             value={currentLocationId ?? "all"}
             onChange={event => apply({ location: event.target.value === "all" ? "" : event.target.value })}
-            className="h-11 w-auto min-w-40"
+            className="h-10 w-auto min-w-40"
           >
             <option value="all">All locations</option>
             {locations.map(location => (

@@ -33,10 +33,11 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Not signed in: bounce through auth and come back to this exact link.
+  // A new employee must use the server-validated registration form. Existing
+  // accounts still use the normal login route and return here afterward.
   if (!user) {
     const next = encodeURIComponent(`/invite/${token}`);
-    redirect(`/auth/login?next=${next}`);
+    redirect(`/auth/sign-up?kind=employee&token=${encodeURIComponent(token)}&email=${encodeURIComponent(invitation?.email ?? "")}&next=${next}`);
   }
 
   // Do not treat a self-asserted address as proof of mailbox ownership. This
@@ -46,10 +47,10 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
 
   if (rejection || !invitation) {
     return (
-      <main className="grid min-h-screen place-items-center p-6">
+      <main className="grid min-h-screen place-items-center p-5">
         <Card className="max-w-md">
           <CardContent className="pt-6 text-center">
-            <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-red-50 text-red-700">
+            <span className="mx-auto grid size-12 place-items-center rounded-lg bg-red-50 text-red-700">
               <ShieldAlert size={24} />
             </span>
             <h1 className="mt-4 text-2xl font-black">Invitation unavailable</h1>
@@ -73,17 +74,17 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   }
 
   return (
-    <main className="grid min-h-screen place-items-center p-6">
+    <main className="grid min-h-screen place-items-center p-5">
       <Card className="max-w-md">
         <CardContent className="pt-6 text-center">
-          <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-green-50 text-green-800">
+          <span className="mx-auto grid size-12 place-items-center rounded-lg bg-green-50 text-green-800">
             <MailCheck size={24} />
           </span>
           <h1 className="mt-4 text-2xl font-black">Join {invitation.organizationName}</h1>
           <p className="mt-2 text-[var(--muted)]">
             You have been invited as <b>{ROLE_LABELS[invitation.role]}</b>.
           </p>
-          <p className="mt-3 rounded-xl bg-neutral-50 p-3 text-sm text-[var(--muted)]">
+          <p className="mt-3 rounded-lg bg-neutral-50 p-3 text-sm text-[var(--muted)]">
             {ROLE_DESCRIPTIONS[invitation.role]}
           </p>
           <p className="mt-3 text-xs text-[var(--muted)]">Accepting as {user.email}</p>

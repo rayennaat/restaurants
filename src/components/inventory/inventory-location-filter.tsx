@@ -35,7 +35,7 @@ export function InventoryLocationFilter({
         value={currentLocationId ?? "all"}
         onChange={event => apply(event.currentTarget.value)}
         disabled={pending}
-        className="h-11 min-w-40"
+        className="h-10 min-w-40"
       >
         <option value="all">All locations</option>
         {locations.map(location => (

@@ -1,4 +1,4 @@
-# PlatePilot — Restaurant Profit & Operations OS
+# Yield — Restaurant Profit & Operations OS
 
 A production-oriented MVP for multi-location restaurant inventory, purchasing, waste tracking, recipe costing and profitability reporting.
 

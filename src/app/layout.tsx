@@ -5,11 +5,11 @@ import messages from "@/messages/en.json";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  applicationName: "PlatePilot",
-  title: { default: "PlatePilot Restaurant OS", template: "%s | PlatePilot" },
+  applicationName: "Yield",
+  title: { default: "Yield Restaurant OS", template: "%s | Yield" },
   description: "Inventory, recipe costing, waste and restaurant profitability in one operating system.",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "PlatePilot", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Yield", statusBarStyle: "default" },
 };
 export const viewport: Viewport = { themeColor: "#166534" };
 

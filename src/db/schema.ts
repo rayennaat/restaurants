@@ -9,6 +9,15 @@ import { bigint, boolean, index, integer, numeric, pgEnum, pgTable, primaryKey, 
  */
 export const memberRole = pgEnum("member_role", ["owner", "manager", "inventory", "kitchen", "accountant", "viewer"]);
 export const invitationStatus = pgEnum("invitation_status", ["pending", "accepted", "revoked"]);
+export const ownerOnboardingStatus = pgEnum("owner_onboarding_status", ["pending", "claimed", "revoked"]);
+export const organizationPlan = pgEnum("organization_plan", ["pilot", "starter", "restaurant", "multi_location"]);
+export const organizationStatus = pgEnum("organization_status", ["active", "pilot", "suspended", "cancelled"]);
+export const platformAuditAction = pgEnum("platform_audit_action", [
+  "owner_invitation_issued",
+  "owner_invitation_revoked",
+  "organization_plan_changed",
+  "organization_status_changed",
+]);
 
 /**
  * Stock count lifecycle. `draft` and `counting` are both editable; the split
@@ -67,8 +76,10 @@ export const organizations = pgTable("organizations", {
   timezone: text("timezone").notNull().default("Africa/Tunis"),
   /** Set once the owner finishes (or skips) the guided setup checklist. */
   onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
+  plan: organizationPlan("plan").notNull().default("pilot"),
+  status: organizationStatus("status").notNull().default("pilot"),
   ...timestamps,
-}, t => [uniqueIndex("organizations_slug_uidx").on(t.slug)]);
+}, t => [uniqueIndex("organizations_slug_uidx").on(t.slug), index("organizations_status_idx").on(t.status), index("organizations_plan_idx").on(t.plan)]);
 
 export const locations = pgTable("locations", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -124,6 +135,51 @@ export const organizationInvitations = pgTable("organization_invitations", {
   index("org_invitations_org_idx").on(t.organizationId),
   uniqueIndex("org_invitations_token_uidx").on(t.tokenHash),
 ]);
+
+/**
+ * A controlled first-owner onboarding authorization. The raw token exists only
+ * in the operator-issued URL; this table stores its hash and can be read only
+ * by trusted server code through the privileged runtime connection.
+ */
+export const ownerOnboardingTokens = pgTable("owner_onboarding_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  status: ownerOnboardingStatus("status").notNull().default("pending"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  claimedBy: uuid("claimed_by"),
+  ...timestamps,
+}, t => [uniqueIndex("owner_onboarding_tokens_hash_uidx").on(t.tokenHash), index("owner_onboarding_tokens_email_idx").on(t.email)]);
+
+/** Application-owned identity details available to the least-privileged runtime role. */
+export const userProfiles = pgTable("user_profiles", {
+  userId: uuid("user_id").primaryKey(),
+  email: text("email").notNull(),
+  emailConfirmedAt: timestamp("email_confirmed_at", { withTimezone: true }),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  status: text("status").notNull().default("active"),
+  ...timestamps,
+}, t => [index("user_profiles_email_idx").on(t.email), index("user_profiles_status_idx").on(t.status)]);
+
+/** Explicit platform-admin allowlist. Restaurant membership roles never grant this access. */
+export const platformAdmins = pgTable("platform_admins", {
+  userId: uuid("user_id").primaryKey(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** Platform-wide administrative events, separate from tenant audit history. */
+export const platformAuditLogs = pgTable("platform_audit_logs", {
+  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  actorUserId: uuid("actor_user_id").notNull(),
+  organizationId: uuid("organization_id"),
+  action: platformAuditAction("action").notNull(),
+  entityId: uuid("entity_id"),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [index("platform_audit_logs_org_idx").on(t.organizationId), index("platform_audit_logs_created_idx").on(t.createdAt)]);
 
 export const units = pgTable("units", {
   id: uuid("id").primaryKey().defaultRandom(),
