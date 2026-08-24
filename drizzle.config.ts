@@ -4,6 +4,7 @@ import { defineConfig } from "drizzle-kit";
 const ENV_FILES = {
   local: ".env.local",
   staging: ".env.staging",
+  production: ".env.prod",
 } as const;
 
 type DatabaseEnvironment = keyof typeof ENV_FILES;
@@ -11,7 +12,7 @@ type DatabaseEnvironment = keyof typeof ENV_FILES;
 const requestedEnvironment = process.env.DB_ENV ?? "local";
 
 if (!(requestedEnvironment in ENV_FILES)) {
-  throw new Error(`Invalid DB_ENV "${requestedEnvironment}". Use "local" or "staging".`);
+  throw new Error(`Invalid DB_ENV "${requestedEnvironment}". Use "local", "staging", or "production".`);
 }
 
 const databaseEnvironment = requestedEnvironment as DatabaseEnvironment;

@@ -15,6 +15,7 @@
     "db:generate": "DB_ENV=local drizzle-kit generate",
     "db:migrate": "DB_ENV=local drizzle-kit migrate",
     "db:migrate:staging": "DB_ENV=staging drizzle-kit migrate",
+    "db:migrate:production": "DB_ENV=production drizzle-kit migrate",
     "db:push": "DB_ENV=local drizzle-kit push",
     "db:studio": "DB_ENV=local drizzle-kit studio",
     "db:studio:staging": "DB_ENV=staging drizzle-kit studio",
