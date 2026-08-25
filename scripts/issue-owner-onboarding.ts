@@ -1,5 +1,6 @@
 import { issueOwnerOnboardingToken } from "../src/server/queries/owner-onboarding";
 import { createOwnerOnboardingToken, hashOwnerOnboardingToken, normalizeOnboardingEmail, ownerOnboardingExpiry } from "../src/lib/owner-onboarding";
+import { getAppUrl } from "../src/lib/app-url";
 import { config } from "dotenv";
 
 const USAGE = "Usage: npm run onboarding:issue-owner -- owner@example.com";
@@ -52,8 +53,7 @@ async function main(): Promise<void> {
   const expiresAt = ownerOnboardingExpiry();
   await issueOwnerOnboardingToken(email, expiresAt, hashOwnerOnboardingToken(token));
 
-  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  console.log(`Owner onboarding URL: ${origin}/onboarding/${token}`);
+  console.log(`Owner onboarding URL: ${getAppUrl()}/onboarding/${token}`);
   console.log(`Intended email: ${email}`);
   console.log(`Expires: ${expiresAt.toISOString()}`);
 }

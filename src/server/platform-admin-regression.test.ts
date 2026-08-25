@@ -53,6 +53,19 @@ describe("platform administration boundaries", () => {
     }
   });
 
+  it("generates owner links from NEXT_PUBLIC_APP_URL with a local-only fallback", () => {
+    const actions = read("src/server/actions/platform-admin.ts");
+    const issuer = read("scripts/issue-owner-onboarding.ts");
+    const helper = read("src/lib/app-url.ts");
+
+    expect(helper).toContain("NEXT_PUBLIC_APP_URL");
+    expect(helper).toContain("http://localhost:3000");
+    expect(actions).toContain("getAppUrl()");
+    expect(issuer).toContain("getAppUrl()");
+    expect(actions).not.toContain("NEXT_PUBLIC_SITE_URL");
+    expect(issuer).not.toContain("NEXT_PUBLIC_SITE_URL");
+  });
+
   it("keeps platform mutations server-authorized and audited", () => {
     const actions = read("src/server/actions/platform-admin.ts");
     expect(actions).toContain("requirePlatformAdminAction");

@@ -7,6 +7,7 @@ import { organizations, ownerOnboardingTokens, platformAuditLogs } from "@/db/sc
 import { createOwnerOnboardingToken, hashOwnerOnboardingToken, normalizeOnboardingEmail, ownerOnboardingExpiry } from "@/lib/owner-onboarding";
 import { actionError, actionOk, toActionError, type ActionResult } from "@/server/action-result";
 import { requirePlatformAdminAction } from "@/server/platform-admin";
+import { getAppUrl } from "@/lib/app-url";
 
 const PLANS = ["pilot", "starter", "restaurant", "multi_location"] as const;
 const STATUSES = ["active", "pilot", "suspended", "cancelled"] as const;
@@ -22,9 +23,6 @@ function isStatus(value: string): value is Status {
   return (STATUSES as readonly string[]).includes(value);
 }
 
-function siteOrigin() {
-  return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-}
 
 export async function issuePlatformOwnerInvitation(emailInput: string): Promise<ActionResult<{ url: string; email: string; expiresAt: string }>> {
   try {
@@ -48,7 +46,7 @@ export async function issuePlatformOwnerInvitation(emailInput: string): Promise<
     });
 
     revalidatePath("/admin/invitations");
-    return actionOk({ url: `${siteOrigin()}/onboarding/${token}`, email, expiresAt: expiresAt.toISOString() });
+    return actionOk({ url: `${getAppUrl()}/onboarding/${token}`, email, expiresAt: expiresAt.toISOString() });
   } catch (error) {
     return toActionError(error);
   }
