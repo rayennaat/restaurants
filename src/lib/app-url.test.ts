@@ -6,8 +6,13 @@ describe("application URL resolution", () => {
     expect(getAppUrl({ NEXT_PUBLIC_APP_URL: "https://app.yield.website/" })).toBe("https://app.yield.website");
   });
 
-  it("uses localhost only when the app URL is not configured", () => {
+  it("uses localhost only outside production when the app URL is not configured", () => {
     expect(getAppUrl({})).toBe(LOCAL_APP_URL);
-    expect(getAppUrl({ NEXT_PUBLIC_APP_URL: "   " })).toBe(LOCAL_APP_URL);
+    expect(getAppUrl({ NEXT_PUBLIC_APP_URL: "   ", NODE_ENV: "development" })).toBe(LOCAL_APP_URL);
+  });
+
+  it("fails explicitly in production when the app URL is not configured", () => {
+    expect(() => getAppUrl({ NODE_ENV: "production" })).toThrow("NEXT_PUBLIC_APP_URL must be configured in production.");
+    expect(() => getAppUrl({ NEXT_PUBLIC_APP_URL: "   ", NODE_ENV: "production" })).toThrow("NEXT_PUBLIC_APP_URL must be configured in production.");
   });
 });

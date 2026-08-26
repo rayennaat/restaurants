@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getAppUrl } from "@/lib/app-url";
 import { normalizeOnboardingEmail } from "@/lib/owner-onboarding";
 import { safeNextPath } from "@/lib/redirects";
 import { hashInvitationToken } from "@/lib/invitations";
@@ -53,7 +54,7 @@ export async function registerWithAuthorization(
     }
 
     const supabase = await createClient();
-    const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+    const origin = getAppUrl();
     const next = input.kind === "employee" ? `/invite/${encodeURIComponent(token)}` : `/onboarding/${encodeURIComponent(token)}`;
     const callback = `${origin}/auth/callback?next=${encodeURIComponent(next)}`;
     const result = await supabase.auth.signUp({ email, password: input.password, options: { emailRedirectTo: callback } });
@@ -71,7 +72,7 @@ export async function registerWithAuthorization(
 export async function requestPasswordReset(email: string): Promise<ActionResult> {
   try {
     const supabase = await createClient();
-    const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+    const origin = getAppUrl();
     const result = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
       // Keep the recovery link inside the existing PKCE callback. The callback
       // exchanges the code into the SSR cookie session before redirecting here.
