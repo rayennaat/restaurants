@@ -12,3 +12,17 @@ test("demo health check does not require a database", async ({ request }) => {
   expect(response.ok()).toBe(true);
   await expect(response.json()).resolves.toMatchObject({ ok: true, mode: "demo" });
 });
+
+
+test("owner verification callback preserves the onboarding token", async ({ request }) => {
+  const token = "owner-token-e2e";
+  const next = `/onboarding/${token}`;
+  const response = await request.get(`/auth/callback?next=${encodeURIComponent(next)}`, { maxRedirects: 0 });
+  expect(response.status()).toBeGreaterThanOrEqual(300);
+  expect(response.status()).toBeLessThan(400);
+  const location = response.headers().location;
+  expect(location).toBeTruthy();
+  const redirectUrl = new URL(location!);
+  expect(redirectUrl.pathname).toBe(`/onboarding/${token}`);
+  expect(redirectUrl.pathname).not.toBe("/onboarding");
+});

@@ -25,11 +25,13 @@ export async function GET(request: Request) {
     await supabase.auth.exchangeCodeForSession(code);
   }
   const requestedNext = safeNextPathOr(searchParams.get("next"), "/onboarding");
-  // Password recovery is not a normal login destination. After the PKCE code is
-  // exchanged above, keep the recovered session on the reset screen even when
-  // the account is also a platform admin or restaurant member.
-  const destination = requestedNext === "/reset-password"
+  // Owner onboarding tokens are authorization-bearing destinations. Preserve
+  // the exact token path before membership/no-workspace fallback can collapse a
+  // verified first owner to generic onboarding.
+  const destination = requestedNext.startsWith("/onboarding/")
     ? requestedNext
-    : await resolvePostAuthRoute(requestedNext);
+    : requestedNext === "/reset-password"
+      ? requestedNext
+      : await resolvePostAuthRoute(requestedNext);
   return NextResponse.redirect(`${origin}${destination}`);
 }

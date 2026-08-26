@@ -97,6 +97,8 @@ describe("first-owner onboarding after email verification", () => {
     expect(auth).toContain("next?.startsWith(\"/onboarding/\")");
     expect(callback).toContain("exchangeCodeForSession");
     expect(callback).toContain("safeNextPathOr");
+    expect(callback).toContain('requestedNext.startsWith("/onboarding/")');
+    expect(callback).toContain("? requestedNext");
     expect(callback).toContain("resolvePostAuthRoute(requestedNext)");
   });
 
@@ -114,6 +116,14 @@ describe("first-owner onboarding after email verification", () => {
 
     expect(ownerPage.indexOf("signedInEmail !== invitedEmail")).toBeLessThan(ownerPage.indexOf("const tenant = await getTenantContext()"));
     expect(ownerPage).toContain("if (tenant && \"needsOnboarding\" in tenant) return <WorkspaceCreation ownerToken={token} />");
+  });
+
+  it("routes verified owner onboarding callbacks to the exact token before generic fallback", () => {
+    expect(callback.indexOf('requestedNext.startsWith("/onboarding/")')).toBeLessThan(callback.indexOf("resolvePostAuthRoute(requestedNext)"));
+    expect(callback).toContain('requestedNext === "/reset-password"');
+    expect(callback).toContain("resolvePostAuthRoute(requestedNext)");
+    expect(auth).toContain('if (next?.startsWith("/onboarding/")) return next');
+    expect(auth).toContain('if ("needsOnboarding" in tenant) return "/onboarding"');
   });
 
   it("preserves the owner token through sign-out and verification callback", () => {
