@@ -29,14 +29,25 @@ describe("Auth user and Yield profile lifecycle", () => {
     expect(migration).toContain("ON CONFLICT (user_id) DO UPDATE");
   });
 
-  it("builds /admin/users from live Auth identities rather than stale profiles", () => {
+  it("builds /admin users from Supabase Admin API identities rather than stale profiles", () => {
     const listStart = queries.indexOf("export async function listPlatformUsers");
     const detailStart = queries.indexOf("export async function getPlatformUser");
     const list = queries.slice(listStart, detailStart);
-    expect(list).toContain(".from(authUsers)");
-    expect(list).toContain("leftJoin(userProfiles");
-    expect(list).not.toContain(".from(userProfiles)");
-    expect(queries).toContain("db.select({ count: sql<number>`count(*)` }).from(authUsers)");
+    expect(queries).toContain("listAdminAuthUsers");
+    expect(queries).toContain("getAdminAuthUserById");
+    expect(list).toContain("listAdminAuthUsers()");
+    expect(list).toContain("db.select({ userId: userProfiles.userId");
+    expect(queries).not.toMatch(/authUsers|auth\.users|@\/db\/auth-schema/);
+    expect(actions).not.toMatch(/authUsers|auth\.users|@\/db\/auth-schema/);
+  });
+
+  it("keeps /admin overview counts off the private auth schema", () => {
+    const overviewStart = queries.indexOf("export async function getPlatformOverview");
+    const invitationsStart = queries.indexOf("export async function listPlatformOwnerInvitations");
+    const overview = queries.slice(overviewStart, invitationsStart);
+    expect(overview).toContain("listAdminAuthUsers()");
+    expect(overview).toContain("users: liveUsers.length");
+    expect(overview).not.toMatch(/authUsers|auth\.users|@\/db\/auth-schema/);
   });
 
   it("deactivated profiles are denied restaurant and platform-admin access", () => {

@@ -2,14 +2,13 @@
 
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { authUsers } from "@/db/auth-schema";
 import { getDb } from "@/db/client";
 import { organizationMembers, organizations, ownerOnboardingTokens, platformAdmins, platformAuditLogs, userProfiles } from "@/db/schema";
 import { createOwnerOnboardingToken, hashOwnerOnboardingToken, normalizeOnboardingEmail, ownerOnboardingExpiry } from "@/lib/owner-onboarding";
 import { ActionError, actionError, actionOk, toActionError, type ActionResult } from "@/server/action-result";
 import { requirePlatformAdminAction } from "@/server/platform-admin";
 import { getAppUrl } from "@/lib/app-url";
-import { createAdminClient, hasAdminServiceRole } from "@/lib/supabase/admin";
+import { createAdminClient, getAdminAuthUserById, hasAdminServiceRole } from "@/lib/supabase/admin";
 
 const PLANS = ["pilot", "starter", "restaurant", "multi_location"] as const;
 const STATUSES = ["active", "pilot", "suspended", "cancelled"] as const;
@@ -33,8 +32,7 @@ function revalidateUserAdminViews(userId?: string) {
 }
 
 async function findLiveAuthUser(userId: string) {
-  const [user] = await getDb().select({ id: authUsers.id, email: authUsers.email }).from(authUsers).where(eq(authUsers.id, userId)).limit(1);
-  return user ?? null;
+  return getAdminAuthUserById(userId);
 }
 
 async function assertNotLastOrganizationOwner(userId: string) {
