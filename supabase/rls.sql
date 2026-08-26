@@ -117,7 +117,7 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'platepilot_runtime') THEN
     GRANT SELECT, INSERT, UPDATE ON TABLE public.owner_onboarding_tokens TO platepilot_runtime;
-    GRANT SELECT, INSERT, UPDATE ON TABLE public.user_profiles TO platepilot_runtime;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.user_profiles TO platepilot_runtime;
     GRANT SELECT, INSERT, UPDATE ON TABLE public.platform_admins TO platepilot_runtime;
     GRANT SELECT, INSERT, UPDATE ON TABLE public.platform_audit_logs TO platepilot_runtime;
     GRANT USAGE, SELECT ON SEQUENCE public.platform_audit_logs_id_seq TO platepilot_runtime;

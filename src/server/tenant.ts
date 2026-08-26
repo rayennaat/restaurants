@@ -2,7 +2,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db/client";
-import { locations, organizationMembers, organizations, units } from "@/db/schema";
+import { locations, organizationMembers, organizations, units, userProfiles } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import type { UnitRow } from "@/lib/units";
 import { normalizeRole, type MemberRole } from "@/lib/permissions";
@@ -47,6 +47,9 @@ export const getTenantContext = cache(async (): Promise<TenantState> => {
   if (!user) return null;
 
   const db = getDb();
+  const [profile] = await db.select({ status: userProfiles.status }).from(userProfiles).where(eq(userProfiles.userId, user.id)).limit(1);
+  if (profile?.status && profile.status !== "active") return null;
+
   const [row] = await db
     .select({
       organizationId: organizationMembers.organizationId,
@@ -59,9 +62,11 @@ export const getTenantContext = cache(async (): Promise<TenantState> => {
       onboardingCompletedAt: organizations.onboardingCompletedAt,
       plan: organizations.plan,
       status: organizations.status,
+      profileStatus: userProfiles.status,
     })
     .from(organizationMembers)
     .innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
+    .leftJoin(userProfiles, eq(userProfiles.userId, organizationMembers.userId))
     .where(eq(organizationMembers.userId, user.id))
     .orderBy(asc(organizationMembers.createdAt))
     .limit(1);

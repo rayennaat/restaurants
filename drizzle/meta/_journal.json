@@ -99,6 +99,13 @@
       "when": 1787507200000,
       "tag": "0013_platform_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787510800000,
+      "tag": "0014_auth_user_lifecycle",
+      "breakpoints": true
     }
   ]
 }

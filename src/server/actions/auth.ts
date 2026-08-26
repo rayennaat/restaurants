@@ -22,7 +22,8 @@ export async function resolvePostAuthRoute(requestedNext?: string | null): Promi
   if (platformAdmin) return "/admin";
 
   const next = safeNextPath(requestedNext);
-  if (next && !next.startsWith("/admin")) return next;
+  if (next?.startsWith("/onboarding/")) return next;
+  if (next && !next.startsWith("/admin") && next !== "/onboarding") return next;
 
   const tenant = await getTenantContext();
   if (!tenant) return "/auth/login";

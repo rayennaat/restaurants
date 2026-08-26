@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { eq, and } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { platformAdmins } from "@/db/schema";
+import { platformAdmins, userProfiles } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import { ActionError } from "@/lib/action-error";
 
@@ -18,7 +18,8 @@ export async function getPlatformAdmin(): Promise<PlatformAdmin | null> {
   const [admin] = await getDb()
     .select({ userId: platformAdmins.userId })
     .from(platformAdmins)
-    .where(and(eq(platformAdmins.userId, user.id), eq(platformAdmins.active, true)))
+    .leftJoin(userProfiles, eq(userProfiles.userId, platformAdmins.userId))
+    .where(and(eq(platformAdmins.userId, user.id), eq(platformAdmins.active, true), eq(userProfiles.status, "active")))
     .limit(1);
 
   return admin ? { userId: user.id, email: user.email ?? null } : null;

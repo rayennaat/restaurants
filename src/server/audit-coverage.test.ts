@@ -80,6 +80,9 @@ const EXEMPT: Record<string, string> = {
   "platform-admin.ts:issuePlatformOwnerInvitation": "Writes a platform audit event for owner onboarding issuance.",
   "platform-admin.ts:revokePlatformOwnerInvitation": "Writes a platform audit event for owner onboarding revocation.",
   "platform-admin.ts:updatePlatformOrganization": "Writes platform audit events for plan and status changes.",
+  "platform-admin.ts:deactivatePlatformUser": "Writes a platform audit event for user deactivation.",
+  "platform-admin.ts:reactivatePlatformUser": "Writes a platform audit event for user reactivation.",
+  "platform-admin.ts:deletePlatformUser": "Writes a platform audit event for user deletion.",
 };
 
 describe("every server action records an audit entry", () => {

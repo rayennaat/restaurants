@@ -1,4 +1,5 @@
 import { asc, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { authUsers } from "@/db/auth-schema";
 import { getDb } from "@/db/client";
 import {
   ingredients,
@@ -51,14 +52,14 @@ export async function listPlatformOrganizations(search = ""): Promise<PlatformOr
       plan: organizations.plan,
       status: organizations.status,
       createdAt: organizations.createdAt,
-      ownerEmail: sql<string>`coalesce(max(case when ${organizationMembers.role} = 'owner' then ${userProfiles.email} end), 'Unknown owner')`,
-      users: sql<number>`count(distinct ${organizationMembers.userId})`,
+      ownerEmail: sql<string>`coalesce(max(case when ${organizationMembers.role} = 'owner' then ${authUsers.email} end), 'Unknown owner')`,
+      users: sql<number>`count(distinct ${authUsers.id})`,
       locations: sql<number>`count(distinct ${locations.id})`,
       lastActivityAt: sql<Date | null>`greatest(max(${purchases.createdAt}), max(${sales.createdAt}), max(${organizationMembers.createdAt}), max(${organizations.updatedAt}))`,
     })
     .from(organizations)
     .leftJoin(organizationMembers, eq(organizationMembers.organizationId, organizations.id))
-    .leftJoin(userProfiles, eq(userProfiles.userId, organizationMembers.userId))
+    .leftJoin(authUsers, eq(authUsers.id, organizationMembers.userId))
     .leftJoin(locations, eq(locations.organizationId, organizations.id))
     .leftJoin(purchases, eq(purchases.organizationId, organizations.id))
     .leftJoin(sales, eq(sales.organizationId, organizations.id))
@@ -86,9 +87,9 @@ export async function getPlatformOrganization(id: string) {
   if (!organization) return null;
 
   const [members, locationRows, counts, invitations] = await Promise.all([
-    db.select({ userId: organizationMembers.userId, email: userProfiles.email, role: organizationMembers.role, joinedAt: organizationMembers.createdAt })
+    db.select({ userId: organizationMembers.userId, email: authUsers.email, role: organizationMembers.role, joinedAt: organizationMembers.createdAt })
       .from(organizationMembers)
-      .leftJoin(userProfiles, eq(userProfiles.userId, organizationMembers.userId))
+      .leftJoin(authUsers, eq(authUsers.id, organizationMembers.userId))
       .where(eq(organizationMembers.organizationId, id))
       .orderBy(asc(organizationMembers.createdAt)),
     db.select({ id: locations.id, name: locations.name, active: locations.isActive, createdAt: locations.createdAt })
@@ -129,7 +130,7 @@ export async function getPlatformOverview() {
     db.select({ id: platformAuditLogs.id, action: platformAuditLogs.action, organizationId: platformAuditLogs.organizationId, entityId: platformAuditLogs.entityId, metadata: platformAuditLogs.metadata, createdAt: platformAuditLogs.createdAt }).from(platformAuditLogs).orderBy(desc(platformAuditLogs.createdAt)).limit(12),
   ]);
   const [users, locationCount] = await Promise.all([
-    db.select({ count: sql<number>`count(*)` }).from(userProfiles),
+    db.select({ count: sql<number>`count(*)` }).from(authUsers),
     db.select({ count: sql<number>`count(*)` }).from(locations),
   ]);
   return {
@@ -167,15 +168,54 @@ export async function listPlatformOwnerInvitations() {
 export async function listPlatformUsers(search = "") {
   await requirePlatformAdmin();
   const term = search.trim();
-  const profileWhere = term ? or(ilike(userProfiles.email, `%${term}%`), ilike(userProfiles.userId, `%${term}%`)) : undefined;
+  const where = term ? or(ilike(authUsers.email, `%${term}%`), sql`${authUsers.id}::text ilike ${`%${term}%`}`) : undefined;
   const rows = await getDb()
-    .select({ userId: userProfiles.userId, email: userProfiles.email, emailConfirmedAt: userProfiles.emailConfirmedAt, lastSeenAt: userProfiles.lastSeenAt, status: userProfiles.status, organizationId: organizationMembers.organizationId, organizationName: organizations.name, role: organizationMembers.role })
-    .from(userProfiles)
-    .leftJoin(organizationMembers, eq(organizationMembers.userId, userProfiles.userId))
+    .select({
+      userId: authUsers.id,
+      email: authUsers.email,
+      emailConfirmedAt: authUsers.emailConfirmedAt,
+      lastSeenAt: authUsers.lastSignInAt,
+      createdAt: authUsers.createdAt,
+      status: sql<string>`coalesce(${userProfiles.status}, 'active')`,
+      organizationId: organizationMembers.organizationId,
+      organizationName: organizations.name,
+      role: organizationMembers.role,
+    })
+    .from(authUsers)
+    .leftJoin(userProfiles, eq(userProfiles.userId, authUsers.id))
+    .leftJoin(organizationMembers, eq(organizationMembers.userId, authUsers.id))
     .leftJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
-    .where(profileWhere)
-    .orderBy(desc(userProfiles.createdAt));
+    .where(where)
+    .orderBy(desc(authUsers.createdAt));
   return rows;
+}
+
+export async function getPlatformUser(userId: string) {
+  await requirePlatformAdmin();
+  const db = getDb();
+  const [user] = await db
+    .select({
+      userId: authUsers.id,
+      email: authUsers.email,
+      emailConfirmedAt: authUsers.emailConfirmedAt,
+      lastSeenAt: authUsers.lastSignInAt,
+      createdAt: authUsers.createdAt,
+      status: sql<string>`coalesce(${userProfiles.status}, 'active')`,
+    })
+    .from(authUsers)
+    .leftJoin(userProfiles, eq(userProfiles.userId, authUsers.id))
+    .where(eq(authUsers.id, userId))
+    .limit(1);
+  if (!user) return null;
+
+  const memberships = await db
+    .select({ organizationId: organizationMembers.organizationId, organizationName: organizations.name, role: organizationMembers.role, joinedAt: organizationMembers.createdAt })
+    .from(organizationMembers)
+    .innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
+    .where(eq(organizationMembers.userId, userId))
+    .orderBy(asc(organizationMembers.createdAt));
+
+  return { user, memberships };
 }
 
 export async function listPlatformAuditLogs() {

@@ -36,6 +36,19 @@ export default async function OwnerOnboardingPage({ params }: { params: Promise<
   }
 
   const rejection = checkOwnerOnboardingRedeemable(onboarding, user.email ?? null);
+  if (!user.email_confirmed_at) {
+    return (
+      <main className="grid min-h-screen place-items-center p-5">
+        <Card className="max-w-md">
+          <CardContent className="pt-7 text-center">
+            <KeyRound className="mx-auto text-green-800" size={28} />
+            <h1 className="mt-4 text-2xl font-black">Verify your email</h1>
+            <p className="mt-2 text-[var(--muted)]">Confirm the authorized owner email, then return to this onboarding link.</p>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
   if (rejection) {
     return (
       <main className="grid min-h-screen place-items-center p-5">

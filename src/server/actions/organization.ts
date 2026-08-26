@@ -33,6 +33,7 @@ export async function createWorkspace(_prev: unknown, formData: FormData): Promi
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return actionError("Your session expired. Sign in again.");
+    if (!user.email_confirmed_at) return actionError("Verify your email address before creating this workspace.");
 
     const db = getDb();
     const [ownerAuthorization] = await db

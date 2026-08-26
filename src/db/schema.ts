@@ -17,6 +17,9 @@ export const platformAuditAction = pgEnum("platform_audit_action", [
   "owner_invitation_revoked",
   "organization_plan_changed",
   "organization_status_changed",
+  "user_deactivated",
+  "user_reactivated",
+  "user_deleted",
 ]);
 
 /**

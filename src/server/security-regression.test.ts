@@ -124,6 +124,12 @@ describe("direct server-action bypass: nothing runs without a session", () => {
       "Platform-admin allowlist authorization replaces restaurant tenant membership.",
     "platform-admin.ts:updatePlatformOrganization":
       "Platform-admin allowlist authorization replaces restaurant tenant membership.",
+    "platform-admin.ts:deactivatePlatformUser":
+      "Platform-admin allowlist authorization replaces restaurant tenant membership.",
+    "platform-admin.ts:reactivatePlatformUser":
+      "Platform-admin allowlist authorization replaces restaurant tenant membership.",
+    "platform-admin.ts:deletePlatformUser":
+      "Platform-admin allowlist authorization replaces restaurant tenant membership.",
   };
 
   it("finds the actions to check", () => {
@@ -176,6 +182,9 @@ describe("unauthorized role: every mutation consults the permission matrix", () 
     "platform-admin.ts:issuePlatformOwnerInvitation": "Platform-admin allowlist authorization replaces restaurant permissions.",
     "platform-admin.ts:revokePlatformOwnerInvitation": "Platform-admin allowlist authorization replaces restaurant permissions.",
     "platform-admin.ts:updatePlatformOrganization": "Platform-admin allowlist authorization replaces restaurant permissions.",
+    "platform-admin.ts:deactivatePlatformUser": "Platform-admin allowlist authorization replaces restaurant permissions.",
+    "platform-admin.ts:reactivatePlatformUser": "Platform-admin allowlist authorization replaces restaurant permissions.",
+    "platform-admin.ts:deletePlatformUser": "Platform-admin allowlist authorization replaces restaurant permissions.",
   };
 
   for (const action of allActions) {
@@ -245,6 +254,9 @@ describe("cross-tenant write: the organization is never taken from the request",
       "platform-admin.ts:issuePlatformOwnerInvitation": "Platform-admin scope is the active allowlist, not a restaurant organization.",
       "platform-admin.ts:revokePlatformOwnerInvitation": "Platform-admin scope is the active allowlist, not a restaurant organization.",
       "platform-admin.ts:updatePlatformOrganization": "Platform-admin scope is the active allowlist, with the target organization resolved server-side.",
+      "platform-admin.ts:deactivatePlatformUser": "Platform-admin scope is the active allowlist; organization owner safety is resolved server-side.",
+      "platform-admin.ts:reactivatePlatformUser": "Platform-admin scope is the active allowlist, not a restaurant organization.",
+      "platform-admin.ts:deletePlatformUser": "Platform-admin scope is the active allowlist; organization owner safety is resolved server-side.",
     };
 
     for (const action of allActions) {
