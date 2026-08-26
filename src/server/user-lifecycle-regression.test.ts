@@ -87,6 +87,8 @@ describe("first-owner onboarding after email verification", () => {
   const auth = read("src/server/actions/auth.ts");
   const callback = read("src/app/auth/callback/route.ts");
   const ownerPage = read("src/app/onboarding/[token]/page.tsx");
+  const signout = read("src/app/auth/signout/route.ts");
+  const signupPage = read("src/app/auth/sign-up/page.tsx");
   const organization = read("src/server/actions/organization.ts");
 
   it("preserves next=/onboarding/[token] through signup and callback", () => {
@@ -96,6 +98,38 @@ describe("first-owner onboarding after email verification", () => {
     expect(callback).toContain("exchangeCodeForSession");
     expect(callback).toContain("safeNextPathOr");
     expect(callback).toContain("resolvePostAuthRoute(requestedNext)");
+  });
+
+  it("supports valid owner token branches for logged-out, same-email, and different-email sessions", () => {
+    expect(ownerPage).toContain("if (!user)");
+    expect(ownerPage).toContain("<AuthForm mode=\"signup\" token={token} authorizationKind=\"owner\" initialEmail={onboarding!.email}");
+    expect(signupPage).toContain("initialEmail = onboarding?.email");
+    expect(signupPage).toContain("<AuthForm mode=\"signup\" token={token} authorizationKind={kind} initialEmail={initialEmail}");
+
+    expect(ownerPage).toContain("const tokenRejection = checkOwnerOnboardingRedeemable(onboarding, onboarding?.email ?? null)");
+    expect(ownerPage).toContain("signedInEmail !== invitedEmail");
+    expect(ownerPage).toContain("This invitation is for {invitedEmail}");
+    expect(ownerPage).toContain("Sign out and continue");
+    expect(ownerPage).toContain("/auth/signout?next=");
+
+    expect(ownerPage.indexOf("signedInEmail !== invitedEmail")).toBeLessThan(ownerPage.indexOf("const tenant = await getTenantContext()"));
+    expect(ownerPage).toContain("if (tenant && \"needsOnboarding\" in tenant) return <WorkspaceCreation ownerToken={token} />");
+  });
+
+  it("preserves the owner token through sign-out and verification callback", () => {
+    expect(ownerPage).toContain("const next = `/onboarding/${encodeURIComponent(token)}`");
+    expect(ownerPage).toContain("action={`/auth/signout?next=${encodeURIComponent(next)}`}");
+    expect(signout).toContain("safeNextPathOr(searchParams.get(\"next\"), \"/auth/login\")");
+    expect(auth).toContain("/auth/callback?next=");
+    expect(auth).toContain("`/onboarding/${encodeURIComponent(token)}`");
+    expect(callback).toContain("resolvePostAuthRoute(requestedNext)");
+  });
+
+  it("still rejects attempts to claim an owner token with a different email", () => {
+    expect(auth).toContain("checkOwnerOnboardingToken(token, email)");
+    expect(auth).toContain("This owner onboarding link is not valid for that email address.");
+    expect(organization).toContain("checkOwnerOnboardingRedeemable(ownerAuthorization, user.email ?? null)");
+    expect(checkOwnerOnboardingRedeemable({ email: "owner@example.com", status: "pending", expiresAt: new Date(Date.now() + 60_000) }, "other@example.com")).toBe("email_mismatch");
   });
 
   it("requires verified owner email before workspace creation", () => {

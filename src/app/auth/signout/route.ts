@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { safeNextPathOr } from "@/lib/redirects";
 import { NextResponse } from "next/server";
 
 /**
@@ -24,5 +25,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("sign-out failed", error);
   }
-  return NextResponse.redirect(new URL("/auth/login", request.url), 303);
+  const { searchParams } = new URL(request.url);
+  const destination = safeNextPathOr(searchParams.get("next"), "/auth/login");
+  return NextResponse.redirect(new URL(destination, request.url), 303);
 }
