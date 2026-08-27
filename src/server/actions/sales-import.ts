@@ -25,7 +25,7 @@ import {
 import { actionError, actionOk, toActionError, type ActionResult } from "@/server/action-result";
 import { recordAudit } from "@/server/audit";
 import { assertMemberLocation, listLocationOptions } from "@/server/queries/locations";
-import { loadConsumptionRequirements, postSaleConsumption } from "@/server/sale-consumption";
+import { assertSaleStockAvailable, loadConsumptionRequirements, postSaleConsumption } from "@/server/sale-consumption";
 import { canAccessAllLocations, getOrganizationUnits, requirePermission, requireTenant, type TenantContext } from "@/server/tenant";
 import { ActionError } from "@/lib/action-error";
 
@@ -333,6 +333,14 @@ export async function commitSalesImport(
       let consumptionMovements = 0;
 
       for (const sale of plan.sales) {
+        const soldLines = sale.lines.map(line => ({ menuItemId: line.menuItemId, quantity: line.quantity }));
+        await assertSaleStockAvailable(tx, {
+          organizationId: tenant.organizationId,
+          locationId: sale.locationId,
+          soldLines,
+          requirements,
+        });
+
         // The index does the deciding. A concurrent run that already wrote this
         // externalId returns no row here, and its lines are skipped rather than
         // duplicated under a second sale.
@@ -406,7 +414,7 @@ export async function commitSalesImport(
           saleId: row.id,
           soldAt: sale.soldAt,
           performedBy: tenant.userId,
-          soldLines: sale.lines.map(line => ({ menuItemId: line.menuItemId, quantity: line.quantity })),
+          soldLines,
           requirements,
         });
       }

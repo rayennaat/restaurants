@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { planSaleConsumption } from "@/server/sale-consumption";
-import type { MenuItemRequirement } from "@/lib/consumption";
+import { expandMenuItemConsumption, type MenuItemRequirement } from "@/lib/consumption";
+import type { MenuGraphNode, RecipeGraphNode } from "@/lib/costing";
+import { DEFAULT_UNITS } from "@/lib/units";
+import { evaluateStockShortages, planSaleConsumption } from "@/server/sale-consumption";
 
 /**
  * Turning sold dishes into ledger movements.
@@ -134,5 +136,71 @@ describe("expanding a sale into consumption", () => {
     for (const row of planned) {
       expect(row.quantity + -row.quantity).toBe(0);
     }
+  });
+});
+
+describe("selected-location sale availability", () => {
+  it("rejects La Marsa when a nested preparation is short even if Ariana has enough", () => {
+    const burgerMix: RecipeGraphNode = {
+      id: "burger-mix",
+      name: "Burger mix",
+      yieldQuantity: 1,
+      yieldUnitCode: "kg",
+      lines: [
+        {
+          kind: "ingredient",
+          ingredientId: "beef",
+          ingredientName: "Ground beef",
+          quantity: 800,
+          unitCode: "g",
+          baseUnitCode: "kg",
+          unitCostMillis: 9_750,
+        },
+        {
+          kind: "ingredient",
+          ingredientId: "onion",
+          ingredientName: "Onion",
+          quantity: 200,
+          unitCode: "g",
+          baseUnitCode: "kg",
+          unitCostMillis: 2_000,
+        },
+      ],
+    };
+    const burger: MenuGraphNode = {
+      id: "classic-burger",
+      name: "Classic Beef Burger",
+      yieldQuantity: 1,
+      lines: [{
+        kind: "recipe",
+        componentRecipeId: "burger-mix",
+        componentName: "Burger mix",
+        quantity: 200,
+        unitCode: "g",
+      }],
+    };
+
+    const requirements = expandMenuItemConsumption([burger], [burgerMix], DEFAULT_UNITS);
+    const planned = planSaleConsumption([{ menuItemId: "classic-burger", quantity: 1 }], requirements);
+
+    const arianaShortages = evaluateStockShortages(planned, [
+      { ingredientId: "beef", ingredientName: "Ground beef", unit: "kg", available: 1 },
+      { ingredientId: "onion", ingredientName: "Onion", unit: "kg", available: 1 },
+    ]);
+    const laMarsaShortages = evaluateStockShortages(planned, [
+      { ingredientId: "beef", ingredientName: "Ground beef", unit: "kg", available: 0.1 },
+      { ingredientId: "onion", ingredientName: "Onion", unit: "kg", available: 1 },
+    ]);
+
+    expect(planned.find(row => row.ingredientId === "beef")?.quantity).toBeCloseTo(-0.16, 8);
+    expect(arianaShortages).toEqual([]);
+    expect(laMarsaShortages).toHaveLength(1);
+    expect(laMarsaShortages[0]).toMatchObject({
+      ingredientId: "beef",
+      ingredientName: "Ground beef",
+      unit: "kg",
+      available: 0.1,
+    });
+    expect(laMarsaShortages[0].required).toBeCloseTo(0.16, 8);
   });
 });

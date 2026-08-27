@@ -1,4 +1,5 @@
 import { AlertTriangle, CalendarX, ClipboardList } from "lucide-react";
+import { defaultLocationId } from "@/lib/location-selection";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { WasteForm } from "@/components/forms/waste-form";
@@ -12,15 +13,20 @@ import { formatQuantity } from "@/lib/units";
 import { wasteReasonLabel } from "@/lib/waste-reasons";
 import { listIngredientOptions } from "@/server/queries/ingredients";
 import { getWasteSummary, getWasteTrendSeries, listRecentWaste } from "@/server/queries/analytics";
+import { resolveMemberLocation } from "@/server/queries/locations";
 import { getOrganizationUnits, requireTenant } from "@/server/tenant";
 
 export const metadata = { title: "Waste" };
 
-export default async function WastePage() {
+export default async function WastePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await searchParams;
   const tenant = await requireTenant();
   // Two weeks of context, matching what this screen showed before.
   const range = resolveDateRange({ range: "custom", from: isoDaysAgo(13), to: isoDaysAgo(0) });
-  const scope = { organizationId: tenant.organizationId, locationId: tenant.locationId };
+  const requestedLocation = Array.isArray(params.location) ? params.location[0] : params.location;
+  const location = await resolveMemberLocation(tenant, requestedLocation);
+  const selectedLocationId = defaultLocationId(location.id, location.options);
+  const scope = { organizationId: tenant.organizationId, locationId: location.id };
 
   const [ingredients, units, summary, trend, entries] = await Promise.all([
     listIngredientOptions(tenant.organizationId),
@@ -66,8 +72,8 @@ export default async function WastePage() {
                 action={{ label: "Add ingredients", href: "/dashboard/ingredients" }}
                 className="py-8"
               />
-            ) : tenant.locationId ? (
-              <WasteForm ingredients={ingredients} units={units} locationId={tenant.locationId} />
+            ) : location.options.length > 0 ? (
+              <WasteForm ingredients={ingredients} units={units} locations={location.options} defaultLocationId={selectedLocationId} />
             ) : (
               <EmptyState icon={AlertTriangle} title="No location set up" description="Waste is recorded against a location. Create one in settings first." action={{ label: "Open settings", href: "/dashboard/settings" }} className="py-8" />
             )}
@@ -91,6 +97,7 @@ export default async function WastePage() {
                   <TR className="hover:bg-transparent">
                     <TH>Ingredient</TH>
                     <TH>Reason</TH>
+                    <TH>Location</TH>
                     <TH className="text-right">Quantity</TH>
                     <TH className="text-right">Cost</TH>
                   </TR>
@@ -103,6 +110,7 @@ export default async function WastePage() {
                         <span className="block text-xs text-[var(--muted)]">{entry.occurredAt.toLocaleDateString()}</span>
                       </TD>
                       <TD className="text-sm">{wasteReasonLabel(entry.reason)}</TD>
+                      <TD className="text-sm text-[var(--muted)]">{entry.locationName}</TD>
                       <TDNum>{formatQuantity(entry.quantity, entry.unit)}</TDNum>
                       <TDNum className="font-semibold text-red-700">{formatMoney(entry.costMillis, tenant.currency)}</TDNum>
                     </TR>

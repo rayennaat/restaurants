@@ -9,7 +9,7 @@ import { recordSaleInput, voidSaleInput } from "@/lib/validation";
 import { actionError, actionOk, toActionError, type ActionResult } from "@/server/action-result";
 import { recordAudit } from "@/server/audit";
 import { assertMemberLocation } from "@/server/queries/locations";
-import { loadConsumptionRequirements, postSaleConsumption, reverseSaleConsumption } from "@/server/sale-consumption";
+import { assertSaleStockAvailable, loadConsumptionRequirements, postSaleConsumption, reverseSaleConsumption } from "@/server/sale-consumption";
 import { getOrganizationUnits, requirePermission, requireTenant, type MemberRole } from "@/server/tenant";
 import { ActionError } from "@/lib/action-error";
 
@@ -133,6 +133,13 @@ export async function recordSale(input: unknown): Promise<ActionResult<{ id: str
     const soldAt = values.soldAt ?? new Date();
 
     const saleId = await db.transaction(async tx => {
+      await assertSaleStockAvailable(tx, {
+        organizationId: tenant.organizationId,
+        locationId: values.locationId,
+        soldLines: values.items,
+        requirements,
+      });
+
       const [sale] = await tx
         .insert(sales)
         .values({

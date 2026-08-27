@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Coins, Package, Receipt } from "lucide-react";
 import { formatMoney } from "@/lib/money";
 import { listIngredientOptions } from "@/server/queries/ingredients";
-import { getSupplier, getSupplierPriceHistory, listSupplierProducts, listSuppliers } from "@/server/queries/suppliers";
+import { getSupplier, getSupplierDetailMetrics, getSupplierPriceHistory, listSupplierProducts, listSuppliers } from "@/server/queries/suppliers";
 import { hasPermission, getOrganizationUnits, requireTenant } from "@/server/tenant";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -26,8 +26,9 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
   const supplier = await getSupplier(tenant.organizationId, id);
   if (!supplier) notFound();
 
-  const [products, history, ingredients, units, summary] = await Promise.all([
+  const [products, metrics, history, ingredients, units, summary] = await Promise.all([
     listSupplierProducts(tenant.organizationId, id),
+    getSupplierDetailMetrics(tenant.organizationId, id),
     getSupplierPriceHistory(tenant.organizationId, id, { limit: 60 }),
     listIngredientOptions(tenant.organizationId),
     getOrganizationUnits(tenant.organizationId),
@@ -61,8 +62,8 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Total spend" value={formatMoney(summary?.totalSpendMillis ?? 0, tenant.currency)} hint={`${summary?.purchaseCount ?? 0} received invoices`} icon={Coins} />
-        <StatCard label="Products listed" value={String(products.length)} hint="Items in their catalog" icon={Package} />
-        <StatCard label="Price points" value={String(history.length)} hint="Invoice lines on record" icon={Receipt} />
+        <StatCard label="Products listed" value={String(metrics.productCount)} hint="Catalog or invoice products" icon={Package} />
+        <StatCard label="Price points" value={String(metrics.pricePointCount)} hint="Invoice lines on record" icon={Receipt} />
       </div>
 
       {(supplier.contactName || supplier.phone || supplier.email || supplier.address) && (

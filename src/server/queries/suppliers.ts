@@ -12,6 +12,7 @@ export type SupplierListRow = {
   notes: string | null;
   isActive: boolean;
   productCount: number;
+  pricePointCount: number;
   /** Lifetime spend across received invoices. */
   totalSpendMillis: number;
   purchaseCount: number;
@@ -37,11 +38,34 @@ export async function listSuppliers(organizationId: string, filters: { q?: strin
       address: suppliers.address,
       notes: suppliers.notes,
       isActive: suppliers.isActive,
-      // Inner tables are aliased and the outer supplier id is written as a
-      // qualified literal: a column interpolated into a raw `sql` template is
-      // emitted unqualified, which would resolve against the subquery's own
-      // table and quietly yield zero.
-      productCount: sql<string>`(select count(*) from ${supplierProducts} sp where sp.supplier_id = "suppliers"."id" and sp.is_active = true)`,
+      // List and detail use the same sources: active catalog rows plus products
+      // and price points proven by received invoices. The outer columns stay
+      // qualified because unqualified names would bind inside the subqueries.
+      productCount: sql<string>`(
+        select count(distinct product.ingredient_id)
+        from (
+          select sp.ingredient_id
+          from ${supplierProducts} sp
+          where sp.organization_id = "suppliers"."organization_id"
+            and sp.supplier_id = "suppliers"."id"
+            and sp.is_active = true
+          union all
+          select pi.ingredient_id
+          from ${purchaseItems} pi
+          join ${purchases} p on p.id = pi.purchase_id
+          where p.organization_id = "suppliers"."organization_id"
+            and p.supplier_id = "suppliers"."id"
+            and p.status = 'received'
+        ) product
+      )`,
+      pricePointCount: sql<string>`(
+        select count(*)
+        from ${purchaseItems} pi
+        join ${purchases} p on p.id = pi.purchase_id
+        where p.organization_id = "suppliers"."organization_id"
+          and p.supplier_id = "suppliers"."id"
+          and p.status = 'received'
+      )`,
       totalSpendMillis: sql<string>`(select coalesce(sum(p.total_millis), 0) from ${purchases} p where p.supplier_id = "suppliers"."id" and p.status = 'received')`,
       purchaseCount: sql<string>`(select count(*) from ${purchases} p where p.supplier_id = "suppliers"."id" and p.status = 'received')`,
       lastPurchaseAt: sql<Date | null>`(select max(p.received_at) from ${purchases} p where p.supplier_id = "suppliers"."id" and p.status = 'received')`,
@@ -53,6 +77,7 @@ export async function listSuppliers(organizationId: string, filters: { q?: strin
   return rows.map(row => ({
     ...row,
     productCount: Number(row.productCount),
+    pricePointCount: Number(row.pricePointCount),
     totalSpendMillis: Number(row.totalSpendMillis),
     purchaseCount: Number(row.purchaseCount),
     lastPurchaseAt: row.lastPurchaseAt ? new Date(row.lastPurchaseAt) : null,
@@ -68,6 +93,36 @@ export async function getSupplier(organizationId: string, id: string) {
   return row ?? null;
 }
 
+export type SupplierDetailMetrics = { productCount: number; pricePointCount: number };
+
+/** Supplier detail counts derived from both explicit catalog rows and received invoice history. */
+export async function getSupplierDetailMetrics(organizationId: string, supplierId: string): Promise<SupplierDetailMetrics> {
+  const [row] = await getDb().execute<{ product_count: string; price_point_count: string }>(sql`
+    with catalog_products as (
+      select sp.ingredient_id
+      from ${supplierProducts} sp
+      where sp.organization_id = ${organizationId}
+        and sp.supplier_id = ${supplierId}
+        and sp.is_active = true
+    ),
+    invoice_products as (
+      select pi.ingredient_id
+      from ${purchaseItems} pi
+      join ${purchases} p on p.id = pi.purchase_id
+      where p.organization_id = ${organizationId}
+        and p.supplier_id = ${supplierId}
+        and p.status = 'received'
+    )
+    select
+      (select count(distinct ingredient_id) from (select ingredient_id from catalog_products union all select ingredient_id from invoice_products) products) as product_count,
+      (select count(*) from invoice_products) as price_point_count
+  `);
+
+  return {
+    productCount: Number(row?.product_count ?? 0),
+    pricePointCount: Number(row?.price_point_count ?? 0),
+  };
+}
 export type SupplierProductRow = {
   id: string;
   ingredientId: string;

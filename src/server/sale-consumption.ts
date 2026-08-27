@@ -1,9 +1,10 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { ingredients, menuItemLines, menuItems, stockMovements } from "@/db/schema";
 import { expandMenuItemConsumption, type MenuItemRequirement } from "@/lib/consumption";
 import type { MenuGraphNode } from "@/lib/costing";
 import type { UnitRow } from "@/lib/units";
+import { ActionError } from "@/lib/action-error";
 import { getPreparationGraph } from "@/server/queries/recipes";
 
 /**
@@ -143,6 +144,21 @@ export type PlannedConsumption = {
   unitCostMillis: number;
 };
 
+export type StockShortage = {
+  ingredientId: string;
+  ingredientName: string;
+  unit: string;
+  required: number;
+  available: number;
+};
+
+export type StockBalance = {
+  ingredientId: string;
+  ingredientName: string;
+  unit: string;
+  available: number;
+};
+
 /**
  * Expands sold dishes into the ingredient quantities they consume.
  *
@@ -188,6 +204,96 @@ export function planSaleConsumption(
   return [...byIngredient.values()].filter(row => row.quantity !== 0);
 }
 
+
+export function evaluateStockShortages(
+  planned: PlannedConsumption[],
+  balances: StockBalance[],
+): StockShortage[] {
+  const byIngredient = new Map(balances.map(row => [row.ingredientId, row]));
+
+  return planned.flatMap((row): StockShortage[] => {
+    const required = Math.abs(row.quantity);
+    const current = byIngredient.get(row.ingredientId);
+    const available = current?.available ?? 0;
+    if (available + 1e-9 >= required) return [];
+    return [{
+      ingredientId: row.ingredientId,
+      ingredientName: current?.ingredientName ?? "Unknown ingredient",
+      unit: current?.unit ?? "",
+      required,
+      available,
+    }];
+  });
+}
+
+function shortageMessage(shortages: StockShortage[]) {
+  const lines = shortages
+    .slice(0, 8)
+    .map(row => `${row.ingredientName}: required ${formatStockQuantity(row.required)} ${row.unit}, available ${formatStockQuantity(row.available)} ${row.unit}`);
+  const extra = shortages.length > lines.length ? `; plus ${shortages.length - lines.length} more` : "";
+  return `This sale would make stock negative at this location. ${lines.join("; ")}${extra}.`;
+}
+
+function formatStockQuantity(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+/**
+ * Checks a sale's theoretical ingredient demand against the selected location.
+ *
+ * The advisory locks are transaction-scoped and keyed by
+ * organization/location/ingredient. They serialize concurrent sale recordings
+ * for the same shelf before the balance is read, so two tickets cannot both see
+ * the same last kilo and then overdraw it together.
+ */
+export async function assertSaleStockAvailable(
+  tx: Tx,
+  input: {
+    organizationId: string;
+    locationId: string;
+    soldLines: SoldLine[];
+    requirements: Map<string, MenuItemRequirement[]>;
+  },
+): Promise<StockShortage[]> {
+  const planned = planSaleConsumption(input.soldLines, input.requirements);
+  if (!planned.length) return [];
+
+  const ingredientIds = planned.map(row => row.ingredientId).sort();
+  for (const ingredientId of ingredientIds) {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${input.organizationId}:${input.locationId}:${ingredientId}`}, 0))`);
+  }
+
+  const rows = await tx
+    .select({
+      ingredientId: ingredients.id,
+      ingredientName: ingredients.name,
+      unit: ingredients.baseUnitCode,
+      available: sql<string>`coalesce(sum(${stockMovements.quantity}), 0)`,
+    })
+    .from(ingredients)
+    .leftJoin(
+      stockMovements,
+      and(
+        eq(stockMovements.organizationId, input.organizationId),
+        eq(stockMovements.locationId, input.locationId),
+        eq(stockMovements.ingredientId, ingredients.id),
+      ),
+    )
+    .where(and(eq(ingredients.organizationId, input.organizationId), inArray(ingredients.id, ingredientIds)))
+    .groupBy(ingredients.id);
+
+  const byIngredient = new Map(rows.map(row => [row.ingredientId, {
+    ingredientId: row.ingredientId,
+    ingredientName: row.ingredientName,
+    unit: row.unit,
+    available: Number(row.available ?? 0),
+  }]));
+
+  const shortages = evaluateStockShortages(planned, [...byIngredient.values()]);
+
+  if (shortages.length) throw new ActionError(shortageMessage(shortages));
+  return [];
+}
 /**
  * Writes the consumption movements for one sale.
  *

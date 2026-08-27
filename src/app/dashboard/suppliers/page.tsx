@@ -42,8 +42,8 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
             <p className="mt-1 text-2xl font-black tabular-nums">{rows.reduce((total, row) => total + row.productCount, 0)}</p>
           </div>
           <div className="rounded-lg border bg-white px-4 py-3 shadow-sm">
-            <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]"><ReceiptText size={13} /> Price intelligence</p>
-            <p className="mt-1 text-2xl font-black tabular-nums text-green-900">{comparison.length}</p>
+            <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]"><ReceiptText size={13} /> Price points</p>
+            <p className="mt-1 text-2xl font-black tabular-nums text-green-900">{rows.reduce((total, row) => total + row.pricePointCount, 0)}</p>
           </div>
         </div>
       )}

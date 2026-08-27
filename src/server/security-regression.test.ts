@@ -525,10 +525,13 @@ describe("unauthorized location: a payload cannot reach another site", () => {
     expect(inventory).not.toMatch(/Math\.round\(stock \* row\.unitCostMillis\)/);
   });
 
-  it("the waste endpoint writes the session's location, never the body's", () => {
+  it("the waste endpoint authorizes the submitted location before writing it", () => {
     const source = read("src/app/api/waste/route.ts");
-    expect(source).toMatch(/locationId: tenant\.locationId!/);
-    expect(source).not.toMatch(/locationId: input\.locationId/);
+    expect(source).toMatch(/const locationId = input\.locationId/);
+    expect(source).toMatch(/assertMemberLocation\(tenant, locationId, "record waste"\)/);
+    expect(source).toMatch(/insert\(wasteEntries\)[\s\S]*locationId,/);
+    expect(source).toMatch(/insert\(stockMovements\)[\s\S]*locationId,/);
+    expect(source).not.toMatch(/locationId: tenant\.locationId!/);
   });
 });
 

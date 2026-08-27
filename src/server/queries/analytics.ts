@@ -327,6 +327,105 @@ export async function getInventorySnapshot(scope: Scope): Promise<InventorySnaps
   };
 }
 
+export type LocationStockAlertRow = {
+  locationId: string;
+  locationName: string;
+  ingredientId: string;
+  ingredientName: string;
+  unit: string;
+  stock: number;
+  minimum: number;
+  status: "out" | "low";
+};
+
+export type LocationStockAlertSummary = {
+  total: number;
+  out: number;
+  low: number;
+  locations: { id: string; name: string; alertCount: number }[];
+};
+
+export function summarizeLocationStockAlerts(alerts: LocationStockAlertRow[]): LocationStockAlertSummary {
+  const byLocation = new Map<string, { id: string; name: string; alertCount: number }>();
+  let out = 0;
+  let low = 0;
+
+  for (const alert of alerts) {
+    if (alert.status === "out") out += 1;
+    else low += 1;
+
+    const current = byLocation.get(alert.locationId);
+    if (current) current.alertCount += 1;
+    else byLocation.set(alert.locationId, { id: alert.locationId, name: alert.locationName, alertCount: 1 });
+  }
+
+  return {
+    total: alerts.length,
+    out,
+    low,
+    locations: [...byLocation.values()].sort((a, b) => b.alertCount - a.alertCount || a.name.localeCompare(b.name)),
+  };
+}
+
+/** Location-level shortages, used so all-location totals cannot hide a site that is out. */
+export async function getLocationStockAlerts(organizationId: string): Promise<LocationStockAlertRow[]> {
+  const rows = await getDb().execute<{
+    location_id: string;
+    location_name: string;
+    ingredient_id: string;
+    ingredient_name: string;
+    unit: string;
+    stock: string;
+    minimum: string;
+    status: "out" | "low";
+  }>(sql`
+    with balances as (
+      select
+        l.id as location_id,
+        l.name as location_name,
+        i.id as ingredient_id,
+        i.name as ingredient_name,
+        i.base_unit_code as unit,
+        i.minimum_stock as minimum,
+        coalesce(sum(sm.quantity), 0) as stock
+      from ${locations} l
+      join ${ingredients} i on i.organization_id = l.organization_id and i.is_active = true
+      left join ${stockMovements} sm
+        on sm.organization_id = l.organization_id
+       and sm.location_id = l.id
+       and sm.ingredient_id = i.id
+      where l.organization_id = ${organizationId}
+        and l.is_active = true
+      group by l.id, l.name, i.id, i.name, i.base_unit_code, i.minimum_stock
+    )
+    select
+      location_id,
+      location_name,
+      ingredient_id,
+      ingredient_name,
+      unit,
+      stock,
+      minimum,
+      case when stock <= 0 then 'out' else 'low' end as status
+    from balances
+    where stock <= 0 or (minimum > 0 and stock > 0 and stock <= minimum)
+    order by
+      case when stock <= 0 then 0 else 1 end,
+      location_name,
+      ingredient_name
+  `);
+
+  return [...rows].map(row => ({
+    locationId: row.location_id,
+    locationName: row.location_name,
+    ingredientId: row.ingredient_id,
+    ingredientName: row.ingredient_name,
+    unit: row.unit,
+    stock: toNumber(row.stock),
+    minimum: toNumber(row.minimum),
+    status: row.status,
+  }));
+}
 export type CategoryValueRow = { category: string; valueMillis: number; ingredientCount: number };
 
 /** Inventory value grouped by ingredient category, for the valuation report. */

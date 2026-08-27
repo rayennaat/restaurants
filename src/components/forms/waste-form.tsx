@@ -13,17 +13,20 @@ import { compatibleUnits, type UnitRow } from "@/lib/units";
 import { wasteInput, type WasteInput } from "@/lib/validation";
 import { submitOrQueue } from "@/lib/offline/db";
 import type { IngredientOption } from "@/server/queries/ingredients";
+import type { LocationOption } from "@/server/queries/locations";
 
 type FormInput = z.input<typeof wasteInput>;
 
 export function WasteForm({
   ingredients,
   units,
-  locationId,
+  locations,
+  defaultLocationId,
 }: {
   ingredients: IngredientOption[];
   units: UnitRow[];
-  locationId: string;
+  locations: LocationOption[];
+  defaultLocationId: string;
 }) {
   const router = useRouter();
   const {
@@ -35,7 +38,7 @@ export function WasteForm({
     formState: { isSubmitting },
   } = useForm<FormInput, unknown, WasteInput>({
     resolver: zodResolver(wasteInput),
-    defaultValues: { ingredientId: "", quantity: 1, reason: "expired", note: "", locationId },
+    defaultValues: { ingredientId: "", quantity: 1, reason: "expired", note: "", locationId: defaultLocationId },
   });
 
   const selectedId = watch("ingredientId");
@@ -45,13 +48,22 @@ export function WasteForm({
   async function submit(values: WasteInput) {
     const result = await submitOrQueue("/api/waste", values);
     toast.success(result.queued ? "Waste entry queued offline — it will sync later" : "Waste recorded and deducted from stock");
-    reset({ ingredientId: "", quantity: 1, reason: "expired", note: "", locationId });
+    reset({ ingredientId: "", quantity: 1, reason: "expired", note: "", locationId: values.locationId });
     router.refresh();
   }
 
   return (
     <form onSubmit={handleSubmit(submit)} className="space-y-4">
-      <input type="hidden" {...register("locationId")} />
+      <Field label="Location" required>
+        <Select {...register("locationId")} disabled={locations.length === 1} required>
+          {locations.length > 1 && <option value="">Choose a location…</option>}
+          {locations.map(location => (
+            <option key={location.id} value={location.id}>
+              {location.name}{location.isActive ? "" : " (archived)"}
+            </option>
+          ))}
+        </Select>
+      </Field>
 
       <Field label="Ingredient" required>
         <Select

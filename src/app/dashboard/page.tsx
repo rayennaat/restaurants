@@ -19,6 +19,8 @@ import { wasteReasonLabel } from "@/lib/waste-reasons";
 import { getAnalyticsContext, type AnalyticsSearchParams } from "@/server/analytics-context";
 import {
   getInventorySnapshot,
+  getLocationStockAlerts,
+  summarizeLocationStockAlerts,
   getPurchaseTotals,
   getSupplierPriceChanges,
   getWasteByReason,
@@ -44,8 +46,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const units = await getOrganizationUnits(tenant.organizationId);
 
-  const [inventory, purchaseTotals, waste, wasteTrend, wasteByReason, recentPurchases, recentWaste, menuItems, priceChanges, salesSummary, topSellers] = await Promise.all([
+  const [inventory, locationStockAlerts, purchaseTotals, waste, wasteTrend, wasteByReason, recentPurchases, recentWaste, menuItems, priceChanges, salesSummary, topSellers] = await Promise.all([
     getInventorySnapshot(scope),
+    scope.locationId ? Promise.resolve([]) : getLocationStockAlerts(tenant.organizationId),
     getPurchaseTotals(scope, range),
     getWasteSummary(scope, range),
     getWasteTrendSeries(scope, range, iso => bucketLabel(iso, range.granularity)),
@@ -72,9 +75,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const risingPrices = priceChanges.filter(row => (row.changePercent ?? 0) > 0);
   const periodHint = `${range.label} · ${location.name}`;
 
-  // What the attention band is actually reporting, so its heading can say how
-  // much there is to look at — and stay calm when the answer is nothing.
-  const attentionCount = inventory.outOfStock.length + inventory.lowStock.length;
+  // All-location inventory value is intentionally aggregate, but stock health is
+  // evaluated per shelf so one branch cannot hide another branch's shortage.
+  const locationAlertSummary = summarizeLocationStockAlerts(locationStockAlerts);
+  const locationAttentionCount = locationAlertSummary.total;
+  const attentionCount = scope.locationId
+    ? inventory.outOfStock.length + inventory.lowStock.length
+    : locationAlertSummary.total;
+  const affectedLocationNames = locationAlertSummary.locations.map(item => item.name).join(", ");
 
   return (
     <>
@@ -98,10 +106,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p>
               <b className={attentionCount > 0 ? "text-amber-950" : "text-[var(--foreground)]"}>
-                {attentionCount > 0 ? String(attentionCount) + " inventory item" + (attentionCount === 1 ? "" : "s") + " need attention" : "No urgent stock issues"}
+                {attentionCount > 0
+                  ? String(attentionCount) + " inventory item" + (attentionCount === 1 ? "" : "s") + " need attention"
+                  : "No urgent stock issues"}
               </b>
               <span className="ml-2">
-                {inventory.outOfStock.length} out · {inventory.lowStock.length} low · {location.name}
+                {scope.locationId
+                  ? `${inventory.outOfStock.length} out · ${inventory.lowStock.length} low · ${location.name}`
+                  : `${locationAlertSummary.out} out · ${locationAlertSummary.low} low · ${locationAttentionCount} location alerts · ${affectedLocationNames || "All locations"}`}
               </span>
             </p>
             <Link href="/dashboard/inventory" className="inline-flex items-center gap-1 font-semibold text-green-900 hover:underline">
@@ -160,36 +172,68 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {/* ---------------------------------------------------- operational insights */}
       <Section
         title="Needs attention"
-        description={attentionCount > 0 ? `${attentionCount} item${attentionCount === 1 ? "" : "s"} worth a look before anything else` : "Nothing is broken right now"}
+        description={attentionCount > 0
+          ? `${attentionCount} item${attentionCount === 1 ? "" : "s"} worth a look before anything else${!scope.locationId && affectedLocationNames ? ` · ${affectedLocationNames}` : ""}`
+          : "Nothing is broken right now"}
         tone={attentionCount > 0 ? "alert" : "default"}
       >
         <div className="grid gap-3 xl:grid-cols-3">
+          {locationStockAlerts.length > 0 && (
+            <Card>
+              <CardHeader className="border-b bg-red-50/40">
+                <h3 className="font-black">Location stock alerts</h3>
+                <p className="text-sm text-[var(--muted)]">{locationAlertSummary.out} out · {locationAlertSummary.low} low · {locationAlertSummary.locations.length} affected location{locationAlertSummary.locations.length === 1 ? "" : "s"}</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {locationStockAlerts.slice(0, 6).map(item => (
+                  <div key={`${item.locationId}:${item.ingredientId}`} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                    <div className="min-w-0">
+                      <b className="block truncate text-sm">{item.ingredientName}</b>
+                      <p className="text-xs text-[var(--muted)]">
+                        {item.locationName} · Current: {formatQuantity(item.stock, item.unit)}
+                        {item.minimum > 0 && ` · Minimum: ${formatQuantity(item.minimum, item.unit)}`}
+                      </p>
+                    </div>
+                    <Badge tone={item.status === "out" ? "danger" : "warning"}>{item.status === "out" ? "Out" : "Low"}</Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader className="border-b bg-amber-50/40">
               <h3 className="font-black">Low stock</h3>
               <p className="text-sm text-[var(--muted)]">At or below the minimum you set</p>
             </CardHeader>
             <CardContent className="space-y-3">
-              {inventory.outOfStock.length === 0 && inventory.lowStock.length === 0 ? (
+              {(scope.locationId ? inventory.outOfStock.length === 0 && inventory.lowStock.length === 0 : locationAlertSummary.total === 0) ? (
                 <EmptyState
                   icon={PackageSearch}
-                  title={inventory.activeCount === 0 ? "No ingredients yet" : "Everything is stocked"}
+                  title={
+                    inventory.activeCount === 0
+                      ? "No ingredients yet"
+                      : locationAlertSummary.total > 0
+                        ? "Combined stock hides branch shortages"
+                        : "Everything is stocked"
+                  }
                   description={
                     inventory.activeCount === 0
                       ? "Add your ingredients to start tracking stock levels and low-stock alerts."
-                      : "No ingredient is at or below its minimum level right now."
+                      : locationAlertSummary.total > 0
+                        ? `${locationAlertSummary.total} location-level alert${locationAlertSummary.total === 1 ? "" : "s"} remain at ${affectedLocationNames}. Review the location stock alerts.`
+                        : "No ingredient is at or below its minimum level right now."
                   }
                   action={inventory.activeCount === 0 ? { label: "Add ingredients", href: "/dashboard/ingredients" } : undefined}
                   className="py-6"
                 />
               ) : (
                 <>
-                  {[...inventory.outOfStock, ...inventory.lowStock].slice(0, 6).map(item => (
-                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                  {(scope.locationId ? [...inventory.outOfStock, ...inventory.lowStock] : locationStockAlerts).slice(0, 6).map(item => (
+                    <div key={"locationId" in item ? `${item.locationId}:${item.ingredientId}` : item.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
                       <div className="min-w-0">
-                        <b className="block truncate text-sm">{item.name}</b>
+                        <b className="block truncate text-sm">{"locationName" in item ? item.ingredientName : item.name}</b>
                         <p className="text-xs text-[var(--muted)]">
-                          Current: {formatQuantity(item.stock, item.unit)}
+                          {"locationName" in item && `${item.locationName} · `}Current: {formatQuantity(item.stock, item.unit)}
                           {item.minimum > 0 && ` · Minimum: ${formatQuantity(item.minimum, item.unit)}`}
                         </p>
                       </div>

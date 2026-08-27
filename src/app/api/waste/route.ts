@@ -8,7 +8,8 @@ import { ActionError } from "@/lib/action-error";
 import { isDemoMode } from "@/lib/demo-mode";
 import { toActionError } from "@/server/action-result";
 import { recordAudit } from "@/server/audit";
-import { getOrganizationUnits, getTenantContext, hasPermission } from "@/server/tenant";
+import { assertMemberLocation, listLocationOptions } from "@/server/queries/locations";
+import { canAccessAllLocations, getOrganizationUnits, getTenantContext, hasPermission } from "@/server/tenant";
 
 /**
  * Waste recording over HTTP, used by the offline queue as well as the form.
@@ -20,22 +21,30 @@ import { getOrganizationUnits, getTenantContext, hasPermission } from "@/server/
  * check an accountant could post stock movements by calling the endpoint even
  * though every button that reaches it is hidden from them.
  *
- * The location is taken from the session, never from the body. `wasteInput`
- * carries a `locationId` because the form round-trips one for display, but what
- * is written is `tenant.locationId` — so editing the payload cannot post
- * spoilage against another branch.
+ * The submitted location is validated against the member before writing.
+ * Multi-location operators must choose the site explicitly; site-bound roles may
+ * still only post against their assigned location.
  */
 export async function POST(request: Request) {
   try {
     const input = wasteInput.parse(await request.json());
     const tenant = await getTenantContext();
-    if (!tenant || "needsOnboarding" in tenant || !tenant.locationId) {
+    if (!tenant || "needsOnboarding" in tenant) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     if (!hasPermission(tenant.role, "record_operations")) {
       return NextResponse.json({ error: "Your role does not allow recording waste." }, { status: 403 });
     }
     if (isDemoMode()) return NextResponse.json({ ok: true, demo: true });
+
+    const permittedLocations = canAccessAllLocations(tenant.role)
+      ? await listLocationOptions(tenant.organizationId)
+      : (tenant.locationId ? (await listLocationOptions(tenant.organizationId)).filter(location => location.id === tenant.locationId) : []);
+    const locationId = input.locationId ?? (permittedLocations.length === 1 ? permittedLocations[0].id : undefined);
+    if (!locationId) {
+      return NextResponse.json({ error: "Choose a location for this waste entry." }, { status: 400 });
+    }
+    await assertMemberLocation(tenant, locationId, "record waste");
 
     const db = getDb();
     // Loaded outside the transaction: the conversion table is per-organization
@@ -71,7 +80,7 @@ export async function POST(request: Request) {
         .insert(wasteEntries)
         .values({
           organizationId: tenant.organizationId,
-          locationId: tenant.locationId!,
+          locationId,
           ingredientId: input.ingredientId,
           quantity: String(baseQuantity),
           estimatedCostMillis,
@@ -84,7 +93,7 @@ export async function POST(request: Request) {
 
       await tx.insert(stockMovements).values({
         organizationId: tenant.organizationId,
-        locationId: tenant.locationId!,
+        locationId,
         ingredientId: input.ingredientId,
         type: "waste",
         quantity: String(-baseQuantity),
@@ -107,7 +116,7 @@ export async function POST(request: Request) {
           metadata: {
             ingredientId: input.ingredientId,
             ingredientName: ingredient.name,
-            locationId: tenant.locationId,
+            locationId,
             quantity: baseQuantity,
             enteredQuantity: input.quantity,
             enteredUnit: input.unitCode ?? ingredient.baseUnitCode,
