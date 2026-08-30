@@ -15,6 +15,7 @@ import { averageMarginOrNull, foodCostTone, menuFoodCostPercent } from "@/lib/co
 import { bucketLabel } from "@/lib/date-range";
 import { formatMoney, formatPercent } from "@/lib/money";
 import { formatQuantity } from "@/lib/units";
+import { cn } from "@/lib/utils";
 import { wasteReasonLabel } from "@/lib/waste-reasons";
 import { getAnalyticsContext, type AnalyticsSearchParams } from "@/server/analytics-context";
 import {
@@ -179,13 +180,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       >
         <div className="grid gap-3 xl:grid-cols-3">
           {locationStockAlerts.length > 0 && (
-            <Card>
-              <CardHeader className="border-b bg-red-50/40">
-                <h3 className="font-black">Location stock alerts</h3>
-                <p className="text-sm text-[var(--muted)]">{locationAlertSummary.out} out · {locationAlertSummary.low} low · {locationAlertSummary.locations.length} affected location{locationAlertSummary.locations.length === 1 ? "" : "s"}</p>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {locationStockAlerts.slice(0, 6).map(item => (
+            <DashboardCard
+              title="Location stock alerts"
+              subtitle={`${locationAlertSummary.out} out · ${locationAlertSummary.low} low · ${locationAlertSummary.locations.length} affected location${locationAlertSummary.locations.length === 1 ? "" : "s"}`}
+              headerClassName="bg-red-50/40"
+              heightClassName="lg:h-[28rem]"
+            >
+              <div className="space-y-3">
+                {locationStockAlerts.map(item => (
                   <div key={`${item.locationId}:${item.ingredientId}`} className="flex items-center justify-between gap-3 rounded-lg border p-3">
                     <div className="min-w-0">
                       <b className="block truncate text-sm">{item.ingredientName}</b>
@@ -197,65 +199,63 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     <Badge tone={item.status === "out" ? "danger" : "warning"}>{item.status === "out" ? "Out" : "Low"}</Badge>
                   </div>
                 ))}
-              </CardContent>
-            </Card>
+              </div>
+            </DashboardCard>
           )}
-          <Card>
-            <CardHeader className="border-b bg-amber-50/40">
-              <h3 className="font-black">Low stock</h3>
-              <p className="text-sm text-[var(--muted)]">At or below the minimum you set</p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {(scope.locationId ? inventory.outOfStock.length === 0 && inventory.lowStock.length === 0 : locationAlertSummary.total === 0) ? (
-                <EmptyState
-                  icon={PackageSearch}
-                  title={
-                    inventory.activeCount === 0
-                      ? "No ingredients yet"
-                      : locationAlertSummary.total > 0
-                        ? "Combined stock hides branch shortages"
-                        : "Everything is stocked"
-                  }
-                  description={
-                    inventory.activeCount === 0
-                      ? "Add your ingredients to start tracking stock levels and low-stock alerts."
-                      : locationAlertSummary.total > 0
-                        ? `${locationAlertSummary.total} location-level alert${locationAlertSummary.total === 1 ? "" : "s"} remain at ${affectedLocationNames}. Review the location stock alerts.`
-                        : "No ingredient is at or below its minimum level right now."
-                  }
-                  action={inventory.activeCount === 0 ? { label: "Add ingredients", href: "/dashboard/ingredients" } : undefined}
-                  className="py-6"
-                />
-              ) : (
-                <>
-                  {(scope.locationId ? [...inventory.outOfStock, ...inventory.lowStock] : locationStockAlerts).slice(0, 6).map(item => (
-                    <div key={"locationId" in item ? `${item.locationId}:${item.ingredientId}` : item.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
-                      <div className="min-w-0">
-                        <b className="block truncate text-sm">{"locationName" in item ? item.ingredientName : item.name}</b>
-                        <p className="text-xs text-[var(--muted)]">
-                          {"locationName" in item && `${item.locationName} · `}Current: {formatQuantity(item.stock, item.unit)}
-                          {item.minimum > 0 && ` · Minimum: ${formatQuantity(item.minimum, item.unit)}`}
-                        </p>
-                      </div>
-                      <Badge tone={item.stock <= 0 ? "danger" : "warning"}>{item.stock <= 0 ? "Out" : "Low"}</Badge>
+          <DashboardCard
+            title="Low stock"
+            subtitle="At or below the minimum you set"
+            headerClassName="bg-amber-50/40"
+            heightClassName="lg:h-[28rem]"
+            footer={
+              (scope.locationId ? inventory.outOfStock.length > 0 || inventory.lowStock.length > 0 : locationAlertSummary.total > 0) ? (
+                <Link href="/dashboard/inventory">
+                  <Button variant="secondary" className="w-full">
+                    View full inventory <ArrowRight size={16} />
+                  </Button>
+                </Link>
+              ) : null
+            }
+          >
+            {(scope.locationId ? inventory.outOfStock.length === 0 && inventory.lowStock.length === 0 : locationAlertSummary.total === 0) ? (
+              <EmptyState
+                icon={PackageSearch}
+                title={
+                  inventory.activeCount === 0
+                    ? "No ingredients yet"
+                    : locationAlertSummary.total > 0
+                      ? "Combined stock hides branch shortages"
+                      : "Everything is stocked"
+                }
+                description={
+                  inventory.activeCount === 0
+                    ? "Add your ingredients to start tracking stock levels and low-stock alerts."
+                    : locationAlertSummary.total > 0
+                      ? `${locationAlertSummary.total} location-level alert${locationAlertSummary.total === 1 ? "" : "s"} remain at ${affectedLocationNames}. Review the location stock alerts.`
+                      : "No ingredient is at or below its minimum level right now."
+                }
+                action={inventory.activeCount === 0 ? { label: "Add ingredients", href: "/dashboard/ingredients" } : undefined}
+                className="py-6"
+              />
+            ) : (
+              <div className="space-y-3">
+                {(scope.locationId ? [...inventory.outOfStock, ...inventory.lowStock] : locationStockAlerts).map(item => (
+                  <div key={"locationId" in item ? `${item.locationId}:${item.ingredientId}` : item.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                    <div className="min-w-0">
+                      <b className="block truncate text-sm">{"locationName" in item ? item.ingredientName : item.name}</b>
+                      <p className="text-xs text-[var(--muted)]">
+                        {"locationName" in item && `${item.locationName} · `}Current: {formatQuantity(item.stock, item.unit)}
+                        {item.minimum > 0 && ` · Minimum: ${formatQuantity(item.minimum, item.unit)}`}
+                      </p>
                     </div>
-                  ))}
-                  <Link href="/dashboard/inventory">
-                    <Button variant="secondary" className="w-full">
-                      View full inventory <ArrowRight size={16} />
-                    </Button>
-                  </Link>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                    <Badge tone={item.stock <= 0 ? "danger" : "warning"}>{item.stock <= 0 ? "Out" : "Low"}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </DashboardCard>
 
-          <Card>
-            <CardHeader>
-              <h3 className="font-black">Recent purchases</h3>
-              <p className="text-sm text-[var(--muted)]">{periodHint}</p>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          <DashboardCard title="Recent purchases" subtitle={periodHint} heightClassName="lg:h-[28rem]">
               {recentPurchases.length === 0 ? (
                 <EmptyState
                   icon={ReceiptText}
@@ -280,15 +280,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   ))}
                 </>
               )}
-            </CardContent>
-          </Card>
+          </DashboardCard>
 
-          <Card>
-            <CardHeader>
-              <h3 className="font-black">Recent waste</h3>
-              <p className="text-sm text-[var(--muted)]">{periodHint}</p>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          <DashboardCard title="Recent waste" subtitle={periodHint} heightClassName="lg:h-[28rem]">
               {recentWaste.length === 0 ? (
                 <EmptyState
                   icon={Trash2}
@@ -310,8 +304,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   </div>
                 ))
               )}
-            </CardContent>
-          </Card>
+          </DashboardCard>
         </div>
       </Section>
 
@@ -321,133 +314,112 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         description="Where the money sits, where it is going and what it is doing to your margin"
       >
         <div className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
-          <Card>
-            <CardHeader>
-              <h3 className="font-black">Waste cost trend</h3>
-              <p className="text-sm text-[var(--muted)]">
-                {waste.events > 0
-                  ? `${formatMoney(waste.cost.current, tenant.currency)} lost · ${waste.events} entries · ${range.granularity === "day" ? "daily" : range.granularity === "week" ? "weekly" : "monthly"}`
-                  : periodHint}
-              </p>
-            </CardHeader>
-            <CardContent>
-              {waste.events === 0 ? (
-                <EmptyState
-                  icon={AlertTriangle}
-                  title="No waste data yet"
-                  description="Record your first waste entry to start tracking waste costs."
-                  action={{ label: "Record waste", href: "/dashboard/waste" }}
-                  className="py-8"
-                />
-              ) : waste.cost.current === 0 ? (
-                <EmptyState
-                  icon={AlertTriangle}
-                  title="Waste recorded, but not costed"
-                  description={`${waste.events} entr${waste.events === 1 ? "y" : "ies"} in this period involve ingredients that have no unit cost yet, so there is nothing to plot. Receive a purchase invoice to price them.`}
-                  action={{ label: "Receive purchase", href: "/dashboard/purchases?view=new" }}
-                  className="py-8"
-                />
-              ) : (
-                <WasteChart data={wasteTrend} currency={tenant.currency} />
-              )}
-            </CardContent>
-          </Card>
+          <DashboardCard
+            title="Waste cost trend"
+            subtitle={waste.events > 0
+              ? `${formatMoney(waste.cost.current, tenant.currency)} lost · ${waste.events} entries · ${range.granularity === "day" ? "daily" : range.granularity === "week" ? "weekly" : "monthly"}`
+              : periodHint}
+            heightClassName="lg:h-[27rem]"
+            bodyClassName="flex flex-col"
+          >
+            {waste.events === 0 ? (
+              <EmptyState
+                icon={AlertTriangle}
+                title="No waste data yet"
+                description="Record your first waste entry to start tracking waste costs."
+                action={{ label: "Record waste", href: "/dashboard/waste" }}
+                className="py-8"
+              />
+            ) : waste.cost.current === 0 ? (
+              <EmptyState
+                icon={AlertTriangle}
+                title="Waste recorded, but not costed"
+                description={`${waste.events} entr${waste.events === 1 ? "y" : "ies"} in this period involve ingredients that have no unit cost yet, so there is nothing to plot. Receive a purchase invoice to price them.`}
+                action={{ label: "Receive purchase", href: "/dashboard/purchases?view=new" }}
+                className="py-8"
+              />
+            ) : (
+              <WasteChart data={wasteTrend} currency={tenant.currency} />
+            )}
+          </DashboardCard>
 
-          <Card>
-            <CardHeader>
-              <h3 className="font-black">Waste by reason</h3>
-              <p className="text-sm text-[var(--muted)]">Where the loss comes from</p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {wasteByReason.length === 0 ? (
-                <EmptyState icon={Trash2} title="Nothing logged" description="Waste reasons appear once entries are recorded." className="py-6" />
-              ) : (
-                wasteByReason.map(row => (
-                  <div key={row.reason}>
-                    <div className="flex items-baseline justify-between gap-2 text-sm">
-                      <span className="font-semibold">{wasteReasonLabel(row.reason)}</span>
-                      <span className="tabular-nums">{formatMoney(row.cost, tenant.currency)}</span>
-                    </div>
-                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-neutral-100">
-                      <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.max(row.sharePercent, 2)}%` }} />
-                    </div>
-                    <p className="mt-1 text-xs text-[var(--muted)]">
-                      {formatPercent(row.sharePercent, 0)} of waste · {row.events} entr{row.events === 1 ? "y" : "ies"}
-                    </p>
+          <DashboardCard title="Waste by reason" subtitle="Where the loss comes from" heightClassName="lg:h-[27rem]">
+            {wasteByReason.length === 0 ? (
+              <EmptyState icon={Trash2} title="Nothing logged" description="Waste reasons appear once entries are recorded." className="py-6" />
+            ) : (
+              wasteByReason.map(row => (
+                <div key={row.reason}>
+                  <div className="flex items-baseline justify-between gap-2 text-sm">
+                    <span className="font-semibold">{wasteReasonLabel(row.reason)}</span>
+                    <span className="tabular-nums">{formatMoney(row.cost, tenant.currency)}</span>
                   </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-neutral-100">
+                    <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.max(row.sharePercent, 2)}%` }} />
+                  </div>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    {formatPercent(row.sharePercent, 0)} of waste · {row.events} entr{row.events === 1 ? "y" : "ies"}
+                  </p>
+                </div>
+              ))
+            )}
+          </DashboardCard>
         </div>
 
         <div className="mt-6 grid gap-5 xl:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <h3 className="font-black">Top ingredient costs</h3>
-              <p className="text-sm text-[var(--muted)]">Where inventory money is tied up · {location.name}</p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {inventory.topByValue.length === 0 ? (
-                <EmptyState
-                  icon={Coins}
-                  title="No stock value yet"
-                  description="Receive a purchase invoice to put stock on hand and value your inventory."
-                  action={{ label: "Receive purchase", href: "/dashboard/purchases?view=new" }}
-                  className="py-6"
-                />
-              ) : (
-                inventory.topByValue.slice(0, 6).map(item => {
-                  const share = inventory.totalValueMillis > 0 ? (item.valueMillis / inventory.totalValueMillis) * 100 : 0;
-                  return (
-                    <div key={item.id}>
-                      <div className="flex items-baseline justify-between gap-2 text-sm">
-                        <span className="truncate font-semibold">{item.name}</span>
-                        <span className="shrink-0 tabular-nums">{formatMoney(item.valueMillis, tenant.currency)}</span>
-                      </div>
-                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-neutral-100">
-                        <div className="h-full rounded-full bg-green-700" style={{ width: `${Math.max(share, 2)}%` }} />
-                      </div>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        {formatQuantity(item.stock, item.unit)} @ {formatMoney(item.unitCostMillis, tenant.currency)}/{item.unit}
-                      </p>
+          <DashboardCard title="Top ingredient costs" subtitle={`Where inventory money is tied up · ${location.name}`} heightClassName="lg:h-[25rem]">
+            {inventory.topByValue.length === 0 ? (
+              <EmptyState
+                icon={Coins}
+                title="No stock value yet"
+                description="Receive a purchase invoice to put stock on hand and value your inventory."
+                action={{ label: "Receive purchase", href: "/dashboard/purchases?view=new" }}
+                className="py-6"
+              />
+            ) : (
+              inventory.topByValue.map(item => {
+                const share = inventory.totalValueMillis > 0 ? (item.valueMillis / inventory.totalValueMillis) * 100 : 0;
+                return (
+                  <div key={item.id}>
+                    <div className="flex items-baseline justify-between gap-2 text-sm">
+                      <span className="truncate font-semibold">{item.name}</span>
+                      <span className="shrink-0 tabular-nums">{formatMoney(item.valueMillis, tenant.currency)}</span>
                     </div>
-                  );
-                })
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <h3 className="font-black">Ingredients getting expensive</h3>
-              <p className="text-sm text-[var(--muted)]">Latest price paid vs the time before</p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {risingPrices.length === 0 ? (
-                <EmptyState
-                  icon={ReceiptText}
-                  title="No price increases detected"
-                  description="Once the same ingredient is bought twice, price movements appear here."
-                  action={{ label: "View suppliers", href: "/dashboard/suppliers" }}
-                  className="py-6"
-                />
-              ) : (
-                risingPrices.map(row => (
-                  <div key={`${row.ingredientId}-${row.supplierId ?? "none"}`} className="flex items-center justify-between gap-3 rounded-lg border p-3">
-                    <div className="min-w-0">
-                      <b className="block truncate text-sm">{row.ingredientName}</b>
-                      <p className="text-xs text-[var(--muted)]">
-                        {row.supplierName ?? "No supplier"} · {formatMoney(row.previousPriceMillis ?? 0, tenant.currency)} →{" "}
-                        {formatMoney(row.currentPriceMillis, tenant.currency)}/{row.baseUnitCode}
-                      </p>
+                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-neutral-100">
+                      <div className="h-full rounded-full bg-green-700" style={{ width: `${Math.max(share, 2)}%` }} />
                     </div>
-                    <Badge tone="danger">+{formatPercent(row.changePercent ?? 0)}</Badge>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      {formatQuantity(item.stock, item.unit)} @ {formatMoney(item.unitCostMillis, tenant.currency)}/{item.unit}
+                    </p>
                   </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+                );
+              })
+            )}
+          </DashboardCard>
+
+          <DashboardCard title="Ingredients getting expensive" subtitle="Latest price paid vs the time before" heightClassName="lg:h-[25rem]">
+            {risingPrices.length === 0 ? (
+              <EmptyState
+                icon={ReceiptText}
+                title="No price increases detected"
+                description="Once the same ingredient is bought twice, price movements appear here."
+                action={{ label: "View suppliers", href: "/dashboard/suppliers" }}
+                className="py-6"
+              />
+            ) : (
+              risingPrices.map(row => (
+                <div key={`${row.ingredientId}-${row.supplierId ?? "none"}`} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                  <div className="min-w-0">
+                    <b className="block truncate text-sm">{row.ingredientName}</b>
+                    <p className="text-xs text-[var(--muted)]">
+                      {row.supplierName ?? "No supplier"} · {formatMoney(row.previousPriceMillis ?? 0, tenant.currency)} →{" "}
+                      {formatMoney(row.currentPriceMillis, tenant.currency)}/{row.baseUnitCode}
+                    </p>
+                  </div>
+                  <Badge tone="danger">+{formatPercent(row.changePercent ?? 0)}</Badge>
+                </div>
+              ))
+            )}
+          </DashboardCard>
         </div>
       </Section>
 
@@ -465,44 +437,34 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </Card>
         ) : (
           <div className="grid gap-5 xl:grid-cols-[1fr_1.4fr]">
-            <Card>
-              <CardHeader>
-                <h3 className="font-black">This period</h3>
-                <p className="text-sm text-[var(--muted)]">{periodHint}</p>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-sm text-[var(--muted)]">Revenue</span>
-                  <b className="text-2xl font-black tabular-nums text-green-800">{formatMoney(salesSummary.revenue.current, tenant.currency)}</b>
-                </div>
-                <div className="flex items-baseline justify-between gap-2 text-sm">
-                  <span className="text-[var(--muted)]">Transactions</span>
-                  <span className="tabular-nums">{salesSummary.transactions.current.toLocaleString()}</span>
-                </div>
-                <div className="flex items-baseline justify-between gap-2 text-sm">
-                  <span className="text-[var(--muted)]">Units sold</span>
-                  <span className="tabular-nums">{salesSummary.unitsSold.current.toLocaleString()}</span>
-                </div>
-                <div className="flex items-baseline justify-between gap-2 text-sm">
-                  <span className="text-[var(--muted)]">Average sale</span>
-                  <span className="tabular-nums">{formatMoney(salesSummary.averageTransactionMillis, tenant.currency)}</span>
-                </div>
-                {/* Purchases against revenue is a rough cost-of-goods signal.
-                    It is not food cost percentage — that needs consumption
-                    matched to the period, which the reports page does. */}
-                {purchaseTotals.current > 0 && salesSummary.revenue.current > 0 && (
-                  <p className="border-t pt-3 text-xs text-[var(--muted)]">
-                    Purchases were {formatPercent((purchaseTotals.current / salesSummary.revenue.current) * 100)} of revenue this period.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+            <DashboardCard title="This period" subtitle={periodHint} heightClassName="lg:h-[21rem]">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-sm text-[var(--muted)]">Revenue</span>
+                <b className="text-2xl font-black tabular-nums text-green-800">{formatMoney(salesSummary.revenue.current, tenant.currency)}</b>
+              </div>
+              <div className="flex items-baseline justify-between gap-2 text-sm">
+                <span className="text-[var(--muted)]">Transactions</span>
+                <span className="tabular-nums">{salesSummary.transactions.current.toLocaleString()}</span>
+              </div>
+              <div className="flex items-baseline justify-between gap-2 text-sm">
+                <span className="text-[var(--muted)]">Units sold</span>
+                <span className="tabular-nums">{salesSummary.unitsSold.current.toLocaleString()}</span>
+              </div>
+              <div className="flex items-baseline justify-between gap-2 text-sm">
+                <span className="text-[var(--muted)]">Average sale</span>
+                <span className="tabular-nums">{formatMoney(salesSummary.averageTransactionMillis, tenant.currency)}</span>
+              </div>
+              {/* Purchases against revenue is a rough cost-of-goods signal.
+                  It is not food cost percentage — that needs consumption
+                  matched to the period, which the reports page does. */}
+              {purchaseTotals.current > 0 && salesSummary.revenue.current > 0 && (
+                <p className="border-t pt-3 text-xs text-[var(--muted)]">
+                  Purchases were {formatPercent((purchaseTotals.current / salesSummary.revenue.current) * 100)} of revenue this period.
+                </p>
+              )}
+            </DashboardCard>
 
-            <Card className="overflow-hidden">
-              <CardHeader>
-                <h3 className="font-black">Best sellers</h3>
-                <p className="text-sm text-[var(--muted)]">By revenue, at the prices actually charged</p>
-              </CardHeader>
+            <DashboardCard title="Best sellers" subtitle="By revenue, at the prices actually charged" heightClassName="lg:h-[21rem]" bodyClassName="px-0 py-0 sm:px-0">
               <Table>
                 <THead>
                   <TR className="hover:bg-transparent">
@@ -523,7 +485,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   ))}
                 </TBody>
               </Table>
-            </Card>
+            </DashboardCard>
           </div>
         )}
       </Section>
@@ -550,11 +512,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </Card>
         ) : (
           <div className="grid gap-5 xl:grid-cols-2">
-            <Card className="overflow-hidden">
-              <CardHeader>
-                <h3 className="font-black">Best margins</h3>
-                <p className="text-sm text-[var(--muted)]">Priced against live ingredient costs</p>
-              </CardHeader>
+            <DashboardCard title="Best margins" subtitle="Priced against live ingredient costs" heightClassName="lg:h-[24rem]" bodyClassName="px-0 py-0 sm:px-0">
               <Table>
                 <THead>
                   <TR className="hover:bg-transparent">
@@ -582,36 +540,30 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   ))}
                 </TBody>
               </Table>
-            </Card>
+            </DashboardCard>
 
-            <Card>
-              <CardHeader>
-                <h3 className="font-black">High food cost</h3>
-                <p className="text-sm text-[var(--muted)]">Above the 35% watch line</p>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {highFoodCost.length === 0 ? (
-                  <EmptyState
-                    icon={TrendingUp}
-                    title="Every item is within range"
-                    description="No costed menu item is above 35% food cost. Margins are healthy across the menu."
-                    className="py-6"
-                  />
-                ) : (
-                  highFoodCost.map(item => (
-                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-red-200/70 bg-red-50/40 p-3">
-                      <div className="min-w-0">
-                        <b className="block truncate text-sm">{item.name}</b>
-                        <p className="text-xs text-[var(--muted)]">
-                          {formatMoney(item.economics.totalCostMillis, tenant.currency)} cost on {formatMoney(item.sellingPriceMillis, tenant.currency)}
-                        </p>
-                      </div>
-                      <Badge tone={foodCostTone(item.economics.foodCostPercent)}>{formatPercent(item.economics.foodCostPercent)}</Badge>
+            <DashboardCard title="High food cost" subtitle="Above the 35% watch line" heightClassName="lg:h-[24rem]">
+              {highFoodCost.length === 0 ? (
+                <EmptyState
+                  icon={TrendingUp}
+                  title="Every item is within range"
+                  description="No costed menu item is above 35% food cost. Margins are healthy across the menu."
+                  className="py-6"
+                />
+              ) : (
+                highFoodCost.map(item => (
+                  <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-red-200/70 bg-red-50/40 p-3">
+                    <div className="min-w-0">
+                      <b className="block truncate text-sm">{item.name}</b>
+                      <p className="text-xs text-[var(--muted)]">
+                        {formatMoney(item.economics.totalCostMillis, tenant.currency)} cost on {formatMoney(item.sellingPriceMillis, tenant.currency)}
+                      </p>
                     </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
+                    <Badge tone={foodCostTone(item.economics.foodCostPercent)}>{formatPercent(item.economics.foodCostPercent)}</Badge>
+                  </div>
+                ))
+              )}
+            </DashboardCard>
           </div>
         )}
       </Section>
@@ -619,6 +571,39 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   );
 }
 
+
+function DashboardCard({
+  title,
+  subtitle,
+  children,
+  footer,
+  heightClassName = "lg:h-[28rem]",
+  headerClassName,
+  bodyClassName,
+  className,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  heightClassName?: string;
+  headerClassName?: string;
+  bodyClassName?: string;
+  className?: string;
+}) {
+  return (
+    <Card className={cn("flex min-h-0 flex-col overflow-hidden", heightClassName, className)}>
+      <CardHeader className={cn("shrink-0 border-b", headerClassName)}>
+        <h3 className="font-black">{title}</h3>
+        {subtitle && <p className="text-sm text-[var(--muted)]">{subtitle}</p>}
+      </CardHeader>
+      <CardContent className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-3", bodyClassName)}>
+        {children}
+      </CardContent>
+      {footer && <div className="shrink-0 border-t bg-white px-4 py-3 sm:px-5">{footer}</div>}
+    </Card>
+  );
+}
 
 function QuickAction({ href, icon: Icon, label }: { href: string; icon: LucideIcon; label: string }) {
   return (
