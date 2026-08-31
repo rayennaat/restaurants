@@ -87,7 +87,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
           </div>
 
           <div className="mt-5 grid items-start gap-5 xl:grid-cols-[2fr_.9fr]">
-            <Card className="overflow-hidden xl:flex xl:max-h-[34rem] xl:flex-col xl:self-start">
+            <Card className="overflow-hidden xl:flex xl:max-h-[53rem] xl:flex-col xl:self-start">
               <CardHeader className="flex flex-wrap items-start justify-between gap-3 border-b">
                 <div>
                   <h2 className="text-lg font-black">Ingredient balances</h2>
@@ -95,12 +95,12 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
                 </div>
                 <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Low and out rows are highlighted</span>
               </CardHeader>
-              <div className="xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain">
+              <div className="scrollbar-thin xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain">
                 <InventoryTable data={inventory} currency={tenant.currency} />
               </div>
             </Card>
 
-            <Card className="overflow-hidden xl:max-h-[34rem] xl:self-start">
+            <Card className="overflow-hidden xl:max-h-[53rem] xl:self-start">
               <CardHeader className="border-b bg-white">
                 <h2 className="text-lg font-black">Recent movements</h2>
                 <p className="text-sm text-[var(--muted)]">Everything that moved this stock in or out.</p>

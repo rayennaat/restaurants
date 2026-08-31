@@ -23,7 +23,7 @@ export function MovementLedger({ rows, currency }: { rows: MovementRow[]; curren
   }
 
   return (
-    <div className="xl:max-h-[27rem] xl:overflow-y-auto xl:overscroll-contain">
+    <div className="scrollbar-thin xl:max-h-[48rem] xl:overflow-y-auto xl:overscroll-contain">
       <ul className="divide-y">
       {rows.map((row, index) => {
         const meta = MOVEMENT_LABELS[row.type] ?? { label: row.type, tone: "neutral" as const };
