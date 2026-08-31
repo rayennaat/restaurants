@@ -1,9 +1,13 @@
 import { cn } from "@/lib/utils";
 
+type TableProps = React.TableHTMLAttributes<HTMLTableElement> & {
+  wrapperClassName?: string;
+};
+
 /** Shared table shell so every list screen has identical density and borders. */
-export function Table({ className, ...props }: React.TableHTMLAttributes<HTMLTableElement>) {
+export function Table({ className, wrapperClassName, ...props }: TableProps) {
   return (
-    <div className="overflow-x-auto">
+    <div className={cn("overflow-x-auto", wrapperClassName)}>
       <table className={cn("w-full text-left text-sm", className)} {...props} />
     </div>
   );

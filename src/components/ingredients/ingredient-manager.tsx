@@ -128,8 +128,8 @@ export function IngredientManager({ rows, units, categories, currency, canManage
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border bg-white shadow-sm">
-          <Table className="min-w-[860px]">
-            <THead>
+          <Table className="min-w-[860px]" wrapperClassName="max-h-[37.25rem] overflow-y-auto overscroll-contain">
+            <THead className="sticky top-0 z-10">
               <TR className="hover:bg-transparent">
                 <TH>Ingredient</TH>
                 <TH>Category</TH>
